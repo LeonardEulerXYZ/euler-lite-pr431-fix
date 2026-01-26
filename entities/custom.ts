@@ -36,26 +36,16 @@ export const intrinsicApySources = [
   { symbol: 'ethx', project: 'stader' },
   { symbol: 'oseth', project: 'stakewise-v2' },
   { symbol: 'ankreth', project: 'ankr' },
+  { symbol: 'syrupusdc', project: 'maple' },
+  { symbol: 'susds', project: 'spark-lending' },
+
 ] as const
 
 export const availableNetworkIds = [
-  1,
   42161,
-  8453,
-  1923,
-  146,
-  60808,
-  80094,
-  43114,
-  56,
-  130,
-  239,
-  59144,
-  9745,
-  143,
 ] as const
 
-export const labelsRepo: string = 'euler-xyz/euler-labels' // https://github.com/euler-xyz/euler-labels
+export const labelsRepo: string = 'kanvgupta/euler-labels' // https://github.com/euler-xyz/euler-labels
 
 export const onboardingInfo = {
   logoUrl: '/logo.png',
