@@ -2,7 +2,7 @@
 import { useVaults } from '~/composables/useVaults'
 import { useEulerAddresses } from '~/composables/useEulerAddresses'
 import { getAssetLogoUrl } from '~/composables/useTokenList'
-import { getVaultUtilization, isSecuritizeBorrowPair, type AnyBorrowVaultPair, type BorrowVaultPair } from '~/entities/vault'
+import { isSecuritizeBorrowPair, type AnyBorrowVaultPair } from '~/entities/vault'
 import { getAssetUsdValueOrZero } from '~/services/pricing/priceProvider'
 import { getProductByVault, applyVaultOverrides, getEntitiesByVault, isVaultFeatured, isVaultDeprecated, isVaultNotExplorableBorrow } from '~/utils/eulerLabelsUtils'
 import { getEulerLabelEntityLogo } from '~/entities/euler/labels'
@@ -15,9 +15,9 @@ import { DEBOUNCE_LIST_PRICE_FETCH_MS } from '~/entities/tuning-constants'
 const { withIntrinsicBorrowApy, withIntrinsicSupplyApy } = useIntrinsicApy()
 const { getSupplyRewardApy, getBorrowRewardApy, getLoopingRewardApy } = useRewardsApy()
 
-const getNetApy = (pair: BorrowVaultPair) => {
-  const baseSupplyApy = nanoToValue(pair.collateral.interestRateInfo?.supplyAPY || 0n, 25)
-  const baseBorrowApy = nanoToValue(pair.borrow.interestRateInfo.borrowAPY, 25)
+const getNetApy = (pair: AnyBorrowVaultPair) => {
+  const baseSupplyApy = getVaultSupplyApy(pair.collateral)
+  const baseBorrowApy = getVaultBorrowApy(pair.borrow)
   const supplyApy = withIntrinsicSupplyApy(baseSupplyApy, pair.collateral.asset.address)
   const borrowApy = withIntrinsicBorrowApy(baseBorrowApy, pair.borrow.asset.address)
   const supplyRewards = getSupplyRewardApy(pair.collateral.address)
@@ -26,11 +26,11 @@ const getNetApy = (pair: BorrowVaultPair) => {
   return (supplyApy + supplyRewards) - (borrowApy - borrowRewards) + loopingRewards
 }
 
-const getSortMaxRoe = (pair: BorrowVaultPair) => {
-  const borrowLTV = nanoToValue(pair.borrowLTV, 2)
+const getSortMaxRoe = (pair: AnyBorrowVaultPair) => {
+  const borrowLTV = ltvToPercent(pair.ltv.borrowLTV)
   const maxMultiplier = Math.max(1, Math.floor(100 / (100 - borrowLTV) * 100) / 100)
-  const baseSupplyApy = nanoToValue(pair.collateral.interestRateInfo?.supplyAPY || 0n, 25)
-  const baseBorrowApy = nanoToValue(pair.borrow.interestRateInfo.borrowAPY, 25)
+  const baseSupplyApy = getVaultSupplyApy(pair.collateral)
+  const baseBorrowApy = getVaultBorrowApy(pair.borrow)
   const supplyApy = withIntrinsicSupplyApy(baseSupplyApy, pair.collateral.asset.address)
   const borrowApy = withIntrinsicBorrowApy(baseBorrowApy, pair.borrow.asset.address)
   const supplyFinal = supplyApy + getSupplyRewardApy(pair.collateral.address)
@@ -58,7 +58,7 @@ const activeBorrowList = computed(() =>
     if (!showAllLabelEntries.value && isVaultNotExplorableBorrow(pair.borrow.address)) return false
     if (!showAllLabelEntries.value && isVaultNotExplorableBorrow(pair.collateral.address)) return false
     if (isOpDisabled(pair.borrow, OP_BORROW)) return false
-    // Securitize collateral has no hookedOps — only check EVK collateral.
+    // Securitize collateral has no EVK hook flags — only check EVK collateral.
     // Fresh-deposit needs OP_DEPOSIT, savings-sourced needs OP_TRANSFER.
     // Hide only when BOTH paths are blocked; the form guards the active path.
     if (!isSecuritizeBorrowPair(pair) && isOpDisabled(pair.collateral, OP_DEPOSIT) && isOpDisabled(pair.collateral, OP_TRANSFER)) return false
@@ -71,10 +71,10 @@ const { searchQuery, matchesSearch, clearSearch } = useVaultSearch<AnyBorrowVaul
   return [
     pair.collateral.asset.symbol,
     pair.collateral.asset.name,
-    pair.collateral.name,
+    pair.collateral.shares.name,
     pair.borrow.asset.symbol,
     pair.borrow.asset.name,
-    pair.borrow.name,
+    pair.borrow.shares.name,
     product.name,
     product.description,
     ...getEntitiesByVault(pair.borrow).map(e => e.name),
@@ -130,8 +130,8 @@ const fetchBorrowPrices = useDebounceFn(async () => {
       pairs.map(async (pair) => {
         const key = getPairKey(pair)
         const [liquidity, borrowed] = await Promise.all([
-          getAssetUsdValueOrZero(pair.borrow.supply >= pair.borrow.borrow ? pair.borrow.supply - pair.borrow.borrow : 0n, pair.borrow, 'off-chain'),
-          getAssetUsdValueOrZero(pair.borrow.borrow, pair.borrow, 'off-chain'),
+          getAssetUsdValueOrZero(pair.borrow.availableLiquidity, pair.borrow, 'off-chain'),
+          getAssetUsdValueOrZero(pair.borrow.totalBorrowed, pair.borrow, 'off-chain'),
         ])
         liquidityValues.set(key, liquidity)
         borrowedValues.set(key, borrowed)
@@ -166,7 +166,7 @@ watchEffect(() => {
 })
 
 const getPairBorrowApy = (pair: AnyBorrowVaultPair): number => {
-  const baseBorrowApy = nanoToValue(pair.borrow.interestRateInfo.borrowAPY, 25)
+  const baseBorrowApy = getVaultBorrowApy(pair.borrow)
   const borrowApy = withIntrinsicBorrowApy(baseBorrowApy, pair.borrow.asset.address)
   const borrowRewards = getBorrowRewardApy(pair.borrow.address, pair.collateral.address)
   return borrowApy - borrowRewards
@@ -182,7 +182,7 @@ const getPairSupplyApy = (pair: AnyBorrowVaultPair): number => {
 }
 
 const getPairMaxLtv = (pair: AnyBorrowVaultPair): number => {
-  return nanoToValue(pair.borrowLTV, 2)
+  return ltvToPercent(pair.ltv.borrowLTV)
 }
 
 const getPairMaxMultiplier = (pair: AnyBorrowVaultPair): number => {
@@ -215,9 +215,9 @@ const {
       case 'totalBorrowed': return pairBorrowedUsd.value.get(key) ?? 0
       case 'supplyApy': return getPairSupplyApy(pair)
       case 'borrowApy': return getPairBorrowApy(pair)
-      case 'netApy': return 'borrowLTV' in pair ? getNetApy(pair as BorrowVaultPair) : 0
-      case 'maxRoe': return 'borrowLTV' in pair ? getSortMaxRoe(pair as BorrowVaultPair) : 0
-      case 'utilization': return getVaultUtilization(pair.borrow)
+      case 'netApy': return getNetApy(pair)
+      case 'maxRoe': return getSortMaxRoe(pair)
+      case 'utilization': return pair.borrow.utilization
       case 'maxLtv': return getPairMaxLtv(pair)
       case 'maxMultiplier': return getPairMaxMultiplier(pair)
       default: return 0
@@ -333,7 +333,7 @@ const sortedBorrowList = computed(() => {
       const list = [...filteredBorrowList.value]
 
       const scores = list.map((pair) => {
-        const maxRoe = 'borrowLTV' in pair ? getSortMaxRoe(pair as BorrowVaultPair) : 0
+        const maxRoe = getSortMaxRoe(pair)
         const liquidityUsd = pairLiquidityUsd.value.get(getPairKey(pair)) ?? 0
         return { pair, maxRoe, liquidityUsd }
       })
@@ -366,7 +366,7 @@ const sortedBorrowList = computed(() => {
       break
     case 'Borrow APY':
       sorted = applyFeaturedPairSort([...filteredBorrowList.value].sort((a: AnyBorrowVaultPair, b: AnyBorrowVaultPair) => {
-        return Number(a.borrow.interestRateInfo.borrowAPY) - Number(b.borrow.interestRateInfo.borrowAPY)
+        return Number(getVaultBorrowApy(a.borrow)) - Number(getVaultBorrowApy(b.borrow))
       }))
       break
     case 'Supply APY':
@@ -376,7 +376,7 @@ const sortedBorrowList = computed(() => {
       break
     case 'Utilization':
       sorted = applyFeaturedPairSort([...filteredBorrowList.value].sort((a: AnyBorrowVaultPair, b: AnyBorrowVaultPair) => {
-        return getVaultUtilization(b.borrow) - getVaultUtilization(a.borrow)
+        return b.borrow.utilization - a.borrow.utilization
       }))
       break
     case 'Total Borrowed':
@@ -388,12 +388,12 @@ const sortedBorrowList = computed(() => {
       break
     case 'Max ROE':
       sorted = applyFeaturedPairSort([...filteredBorrowList.value].sort((a: AnyBorrowVaultPair, b: AnyBorrowVaultPair) => {
-        return getSortMaxRoe(b as BorrowVaultPair) - getSortMaxRoe(a as BorrowVaultPair)
+        return getSortMaxRoe(b) - getSortMaxRoe(a)
       }))
       break
     case 'Net APY':
       sorted = applyFeaturedPairSort([...filteredBorrowList.value].sort((a: AnyBorrowVaultPair, b: AnyBorrowVaultPair) => {
-        return getNetApy(b as BorrowVaultPair) - getNetApy(a as BorrowVaultPair)
+        return getNetApy(b) - getNetApy(a)
       }))
       break
     default:

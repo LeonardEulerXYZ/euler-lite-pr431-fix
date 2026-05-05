@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAccount } from '@wagmi/vue'
 import { isAddress, getAddress, zeroAddress, type Address } from 'viem'
-import { getCashLimitedWithdrawAmount, type Vault, type SecuritizeVault, fetchSecuritizeVault } from '~/entities/vault'
+import { getCashLimitedWithdrawAmount, type EVault, type SecuritizeCollateralVault } from '~/entities/vault'
 import { isSecuritizeVault } from '~/entities/vault/factory'
 import { getSubAccountAddress } from '~/entities/account'
 import { useSwapCollateralOptions } from '~/composables/useSwapCollateralOptions'
@@ -9,14 +9,13 @@ import { SwapperMode } from '~/entities/swap'
 import type { TxPlan } from '~/entities/txPlan'
 import { useIntrinsicApy } from '~/composables/useIntrinsicApy'
 import { formatNumber, formatSmartAmount } from '~/utils/string-utils'
-import { nanoToValue } from '~/utils/crypto-utils'
 import { useSwapPageLogic } from '~/composables/useSwapPageLogic'
 import { normalizeAddress } from '~/utils/normalizeAddress'
 import { isVaultDeprecated } from '~/utils/eulerLabelsUtils'
 import type { DisabledReasonInfo } from '~/components/entities/vault/form/types'
 
 const route = useRoute()
-const { getVault } = useVaults()
+const { getVault, getSecuritizeVault } = useVaults()
 const { address } = useAccount()
 const { depositPositions } = useEulerAccount()
 const { buildSwapPlan, buildSameAssetSwapPlan } = useEulerOperations()
@@ -30,11 +29,11 @@ const subAccount = computed(() => {
 })
 
 // ── Vaults ───────────────────────────────────────────────────────────────
-const fromVault: Ref<Vault | SecuritizeVault | undefined> = ref()
-const toVault: Ref<Vault | undefined> = ref()
+const fromVault: Ref<EVault | SecuritizeCollateralVault | undefined> = ref()
+const toVault: Ref<EVault | undefined> = ref()
 useOperationGuard(computed(() => [fromVault.value?.address, toVault.value?.address].filter(Boolean)))
 
-const fromVaultAsRegular = computed(() => fromVault.value as Vault | undefined)
+const fromVaultAsRegular = computed(() => fromVault.value as EVault | undefined)
 const { collateralOptions, collateralVaults } = useSwapCollateralOptions({ currentVault: fromVaultAsRegular })
 const toVaultOptions = computed(() => collateralVaults.value.filter(vault => !isVaultDeprecated(vault.address)))
 const toVaultOptionAddresses = computed(() => new Set(toVaultOptions.value.map(vault => normalizeAddress(vault.address))))
@@ -68,12 +67,12 @@ const balance = computed(() => getCashLimitedWithdrawAmount(
 // ── Supply APY ───────────────────────────────────────────────────────────
 const fromSupplyApy = computed(() => {
   if (!fromVault.value) return null
-  const base = nanoToValue(fromVault.value.interestRateInfo.supplyAPY || 0n, 25)
+  const base = getVaultSupplyApy(fromVault.value)
   return withIntrinsicSupplyApy(base, fromVault.value.asset.address) + getSupplyRewardApy(fromVault.value.address)
 })
 const toSupplyApy = computed(() => {
   if (!toVault.value) return null
-  const base = nanoToValue(toVault.value.interestRateInfo.supplyAPY || 0n, 25)
+  const base = getVaultSupplyApy(toVault.value)
   return withIntrinsicSupplyApy(base, toVault.value.asset.address) + getSupplyRewardApy(toVault.value.address)
 })
 
@@ -172,7 +171,7 @@ const loadVaults = async () => {
 
     const isFromSecuritize = await isSecuritizeVault(baseAddress)
     if (isFromSecuritize) {
-      fromVault.value = await fetchSecuritizeVault(baseAddress, buildFetchContext())
+      fromVault.value = await getSecuritizeVault(baseAddress)
     }
     else {
       fromVault.value = await getVault(baseAddress)
@@ -182,7 +181,7 @@ const loadVaults = async () => {
       toVault.value = await getVault(targetAddress)
     }
     else if (!isFromSecuritize) {
-      toVault.value = fromVault.value as Vault
+      toVault.value = fromVault.value as EVault
     }
   }
   catch (e) {

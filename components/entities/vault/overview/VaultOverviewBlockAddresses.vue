@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { Vault } from '~/entities/vault'
+import type { EVault } from '~/entities/vault'
 import { getExplorerLink } from '~/utils/block-explorer'
 import { getSpecialAddressLabel } from '~/utils/special-addresses'
+import { getVaultHookTarget } from '~/utils/vault-hooks'
 
-const { vault } = defineProps<{ vault: Vault }>()
+const { vault } = defineProps<{ vault: EVault }>()
 
 const { borrowList } = useVaults()
 const { chainId } = useEulerAddresses()
@@ -14,8 +15,12 @@ const borrowCount = computed(() => {
 
 const isBorrowable = computed(() => borrowCount.value > 0)
 
+const interestRateModelAddress = computed(() =>
+  vault.interestRateModel.address,
+)
+
 const vaultAddresesInfo = computed(() => {
-  const baseAddresses = [
+  const baseAddresses: Array<{ title: string, address?: string }> = [
     {
       title: `${vault.asset.symbol} token`,
       address: vault.asset.address,
@@ -46,19 +51,19 @@ const vaultAddresesInfo = computed(() => {
     baseAddresses.push(
       {
         title: `Fee receiver`,
-        address: vault.governorFeeReceiver,
+        address: vault.fees.governorFeeReceiver,
       },
       {
         title: `Oracle router`,
-        address: vault.oracle,
+        address: vault.oracle.oracle,
       },
       {
         title: `Unit of account`,
-        address: vault.unitOfAccount,
+        address: vault.unitOfAccount?.address,
       },
       {
         title: `Interest rate model`,
-        address: vault.interestRateModelAddress,
+        address: interestRateModelAddress.value,
       },
     )
   }
@@ -66,11 +71,11 @@ const vaultAddresesInfo = computed(() => {
   baseAddresses.push(
     {
       title: `Hook target`,
-      address: vault.hookTarget,
+      address: getVaultHookTarget(vault),
     },
   )
 
-  return baseAddresses
+  return baseAddresses.filter((item): item is { title: string, address: string } => Boolean(item.address))
 })
 
 const shortenAddress = (address: string) => {
