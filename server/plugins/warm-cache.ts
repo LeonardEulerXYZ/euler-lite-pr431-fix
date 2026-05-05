@@ -1,7 +1,7 @@
 /**
  * Pre-populates the in-memory TTL caches for every proxy that serves
  * static/low-churn data (labels, token-list, intrinsic APY, euler-chains,
- * vaults snapshot, public reward campaigns).
+ * public reward campaigns).
  *
  * Nitro's node-server preset calls `server.listen()` synchronously right
  * after firing plugins and does NOT await plugin promises, so warming
@@ -15,22 +15,16 @@
  * Warm-up structure (per cycle): all tasks run in parallel.
  *
  *   • Global:    /api/euler-chains
- *   • Per-chain: labels, token-list, intrinsic-apy, vault-categories,
- *                Merkl opportunities × 3, Brevis campaigns, Fuul × 2,
- *                refreshChainVaults(chainId)
+ *   • Per-chain: labels, token-list, intrinsic-apy, Merkl opportunities × 3,
+ *                Brevis campaigns, Fuul × 2
  *
  * Per-chain warms skip chains listed in `DEPRECATED_CHAINS`. Their data
  * is still served — the first visitor to a deprecated chain pays a
  * cold-upstream fetch, cached from then on under normal TTL behavior.
  *
- * `refreshChainVaults` internally $fetches /api/euler-chains and
- * /api/labels/*, and calls `getVaultCategories(chainId)` — those all
- * collapse onto the parallel warms via in-flight dedup at the cache layer,
- * so no duplicate upstream traffic.
- *
  * Merkl's /tokens/reward payload is fetched transitively by /api/token-list
- * (one of its sources). Merkl's ERC20LOGPROCESSOR refresh also calls
- * `getVaultCategories(chainId)` to filter by the chain earn set.
+ * (one of its sources). Merkl's ERC20LOGPROCESSOR refresh also reads the
+ * labels earn set to keep non-Euler opportunities out of the cached payload.
  */
 import { LABEL_FILES, refreshLabelFile } from '../api/labels/[file].get'
 import { refreshEulerChains } from '../api/euler-chains.get'
@@ -39,8 +33,6 @@ import { getEnabledChainIds } from '~/utils/chain-env'
 import { parseDeprecatedChains } from '~/utils/parseDeprecatedChains'
 import { reportStatus } from '../utils/log'
 import { logger } from '~/server/utils/logger'
-import { refreshChainVaults } from '../utils/vaults-cache'
-import { refreshVaultCategories } from '../utils/vault-categories-store'
 import { refreshIntrinsicApyForChain } from '../utils/intrinsic-apy'
 import {
   type FuulProtocol,
@@ -125,23 +117,11 @@ const warmRewardCampaigns = (chainId: number): Promise<unknown>[] => [
   ),
 ]
 
-const warmVaultCategories = (chainId: number) =>
-  reportWarm(`vault-categories chain=${chainId}`, refreshVaultCategories(chainId))
-
-// Direct call (no $fetch HTTP round-trip) so we get typed errors. Its internal
-// $fetches to /api/euler-chains + /api/labels/* collapse onto Stage A's
-// parallel warms via in-flight dedup at the cache layer, and its call to
-// getVaultCategories() joins the warmVaultCategories task above.
-const warmChainVaults = (chainId: number) =>
-  reportWarm(`vaults chain=${chainId}`, refreshChainVaults(chainId))
-
 const warmChainTasks = (chainId: number): Promise<unknown>[] => [
   ...warmLabels(chainId),
   warmTokenList(chainId),
   warmIntrinsicApy(chainId),
-  warmVaultCategories(chainId),
   ...warmRewardCampaigns(chainId),
-  warmChainVaults(chainId),
 ]
 
 // --- Orchestration ---

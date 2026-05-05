@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { zeroAddress } from 'viem'
-import type { Vault, EarnVault } from '~/entities/vault'
+import type { EVault, EulerEarn } from '~/entities/vault'
 import { isCyclicalNoteVault } from '~/entities/vault'
 import { isVaultKeyring, getEntitiesByVault, getEntitiesByEarnVault } from '~/utils/eulerLabelsUtils'
 import { useEulerProductOfVault } from '~/composables/useEulerLabels'
@@ -10,7 +10,7 @@ const { vaultAddress } = defineProps<{
 }>()
 
 const { isVaultGovernorVerified, isEarnVaultOwnerVerified } = useVaults()
-const { getVault, isEarnVault, isSecuritizeVault } = useVaultRegistry()
+const { getVault, getVaultCategory, isEarnVault, isSecuritizeVault } = useVaultRegistry()
 
 const addressRef = computed(() => vaultAddress)
 const product = useEulerProductOfVault(addressRef)
@@ -21,14 +21,14 @@ const isSecuritize = computed(() => isSecuritizeVault(vaultAddress))
 
 const entities = computed(() => {
   if (!vault.value) return []
-  if (isEarn.value) return getEntitiesByEarnVault(vault.value as EarnVault)
-  return getEntitiesByVault(vault.value as Vault)
+  if (isEarn.value) return getEntitiesByEarnVault(vault.value as EulerEarn)
+  return getEntitiesByVault(vault.value as EVault)
 })
 
 const isVerified = computed(() => {
   if (!vault.value) return false
-  if (isEarn.value) return isEarnVaultOwnerVerified(vault.value as EarnVault)
-  return isVaultGovernorVerified(vault.value as Vault)
+  if (isEarn.value) return isEarnVaultOwnerVerified(vault.value as EulerEarn)
+  return isVaultGovernorVerified(vault.value as EVault)
 })
 
 const isGovernanceLimited = computed(() =>
@@ -42,8 +42,8 @@ const governanceType = computed(() => {
     return entities.value.length ? 'managed' : 'unknown'
   }
 
-  const v = vault.value as Vault
-  if (v.vaultCategory === 'escrow') return 'escrow'
+  const v = vault.value as EVault
+  if (getVaultCategory(vaultAddress) === 'escrow') return 'escrow'
   if (!v.governorAdmin) return 'unknown'
   if (v.governorAdmin === zeroAddress) return 'ungoverned'
   if (entities.value.length) {
@@ -61,7 +61,7 @@ const isKeyring = computed(() => isVaultKeyring(vaultAddress))
 
 const isCyclicalNote = computed(() => {
   if (!vault.value || isEarn.value) return false
-  return isCyclicalNoteVault(vault.value as Vault)
+  return isCyclicalNoteVault(vault.value as EVault)
 })
 </script>
 

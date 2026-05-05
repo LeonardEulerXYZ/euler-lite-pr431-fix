@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { getAddress } from 'viem'
 import { formatNumber, compactNumber, formatCompactUsdValue } from '~/utils/string-utils'
-import { nanoToValue } from '~/utils/crypto-utils'
-import { type AnyBorrowVaultPair, type Vault, getVaultUtilization, isCyclicalNoteVault } from '~/entities/vault'
+import { type AnyBorrowVaultPair, type EVault, isCyclicalNoteVault } from '~/entities/vault'
 import { getUtilisationWarning, getBorrowCapWarning } from '~/composables/useVaultWarnings'
 import { formatAssetValue } from '~/services/pricing/priceProvider'
 import { getMaxMultiplier, getMaxRoe } from '~/utils/leverage'
@@ -16,20 +15,21 @@ import { VaultBorrowApyModal, VaultMaxRoeModal, VaultNetApyPairModal } from '#co
 const { pair } = defineProps<{ pair: AnyBorrowVaultPair }>()
 const { enableEntityBranding } = useDeployConfig()
 const { isVaultGovernorVerified } = useVaults()
+const { getVaultCategory, isVerifiedVault } = useVaultRegistry()
 
 const isAnyGovernorUnverified = computed(() => {
   const borrowUnverified = !isVaultGovernorVerified(pair.borrow)
   const collateralUnverified = 'governorAdmin' in pair.collateral
-    ? !isVaultGovernorVerified(pair.collateral as Vault)
+    ? !isVaultGovernorVerified(pair.collateral as EVault)
     : false
   return borrowUnverified || collateralUnverified
 })
 
 const entityDisplay = computed(() => {
   const borrowEntities = getEntitiesByVault(pair.borrow)
-  // Collateral may be SecuritizeVault but getEntitiesByVault only needs governorAdmin
+  // Collateral may be SecuritizeCollateralVault but getEntitiesByVault only needs governorAdmin
   const collateralEntities = 'governorAdmin' in pair.collateral
-    ? getEntitiesByVault(pair.collateral as Vault)
+    ? getEntitiesByVault(pair.collateral as EVault)
     : []
   // Deduplicate by name
   const seen = new Set<string>()
@@ -67,15 +67,12 @@ const isAnyGovernanceLimited = computed(() =>
 )
 
 const isEscrowCollateral = computed(
-  () =>
-    'vaultCategory' in pair.collateral
-    && pair.collateral.vaultCategory === 'escrow',
+  () => getVaultCategory(pair.collateral.address) === 'escrow',
 )
 
 const isAnyUnverified = computed(() => {
-  const collateralUnverified
-    = 'verified' in pair.collateral && !pair.collateral.verified
-  const borrowUnverified = 'verified' in pair.borrow && !pair.borrow.verified
+  const collateralUnverified = !isVerifiedVault(pair.collateral.address)
+  const borrowUnverified = !isVerifiedVault(pair.borrow.address)
   return collateralUnverified || borrowUnverified
 })
 
@@ -108,8 +105,8 @@ const pairName = computed(() => {
   // Handle escrow collateral specially
   const collateralName = isEscrowCollateral.value
     ? 'Escrowed collateral'
-    : collateralProduct.name || pair.collateral.name
-  const borrowName = borrowProduct.name || pair.borrow.name
+    : collateralProduct.name || pair.collateral.shares.name
+  const borrowName = borrowProduct.name || pair.borrow.shares.name
 
   if (collateralName === borrowName) {
     return collateralName
@@ -132,18 +129,12 @@ const hasAnyRewards = computed(() =>
   hasSupplyRewards(pair.collateral.address) || hasBorrowApyRewards.value || hasLoopingRewards(pair.borrow.address, pair.collateral.address),
 )
 const supplyApy = computed(() => {
-  const interestRateInfo
-    = 'interestRateInfo' in pair.collateral
-      ? pair.collateral.interestRateInfo
-      : null
-  const baseApy = interestRateInfo
-    ? nanoToValue(interestRateInfo.supplyAPY, 25)
-    : 0
+  const baseApy = getVaultSupplyApy(pair.collateral)
   return withIntrinsicSupplyApy(baseApy, pair.collateral.asset.address)
 })
 const borrowApy = computed(() =>
   withIntrinsicBorrowApy(
-    nanoToValue(pair.borrow.interestRateInfo.borrowAPY, 25),
+    getVaultBorrowApy(pair.borrow),
     pair.borrow.asset.address,
   ),
 )
@@ -153,22 +144,22 @@ const supplyApyWithRewards = computed(
 const borrowApyWithRewards = computed(
   () => borrowApy.value - borrowRewardsAPY.value,
 )
-const maxMultiplier = computed(() => getMaxMultiplier(pair.borrowLTV))
+const maxMultiplier = computed(() => getMaxMultiplier(pair.ltv.borrowLTV))
 const netApy = computed(
   () => supplyApyWithRewards.value - borrowApyWithRewards.value + loopingRewardsAPY.value,
 )
 const maxRoe = computed(() =>
   getMaxRoe(maxMultiplier.value, supplyApyWithRewards.value, borrowApyWithRewards.value, loopingRewardsAPY.value),
 )
-const maxLTV = computed(() => formatNumber(nanoToValue(pair.borrowLTV, 2), 2))
-const utilization = computed(() => getVaultUtilization(pair.borrow))
+const maxLTV = computed(() => formatNumber(ltvToPercent(pair.ltv.borrowLTV), 2))
+const utilization = computed(() => pair.borrow.utilization)
 const utilisationWarning = computed(() => getUtilisationWarning(pair.borrow, 'borrow'))
 const borrowCapInfo = computed(() => getBorrowCapWarning(pair.borrow))
 
 const liquidityDisplay = ref('-')
 
 watchEffect(async () => {
-  const liquidity = pair.borrow.supply - pair.borrow.borrow
+  const liquidity = pair.borrow.availableLiquidity
   const price = await formatAssetValue(liquidity, pair.borrow, 'off-chain')
   liquidityDisplay.value = price.hasPrice ? formatCompactUsdValue(price.usdValue) : price.display
 })
@@ -178,7 +169,7 @@ const onBorrowInfoIconClick = (event: MouseEvent) => {
   event.stopPropagation()
   modal.open(VaultBorrowApyModal, {
     props: {
-      borrowingAPY: nanoToValue(pair.borrow.interestRateInfo.borrowAPY, 25),
+      borrowingAPY: getVaultBorrowApy(pair.borrow),
       intrinsicAPY: getIntrinsicApy(pair.borrow.asset.address),
       intrinsicApyInfo: getIntrinsicApyInfo(pair.borrow.asset.address),
       campaigns: getBorrowRewardCampaigns(pair.borrow.address, pair.collateral.address),
@@ -189,10 +180,8 @@ const onBorrowInfoIconClick = (event: MouseEvent) => {
 const onNetApyInfoIconClick = (event: MouseEvent) => {
   event.preventDefault()
   event.stopPropagation()
-  const baseSupply = 'interestRateInfo' in pair.collateral
-    ? nanoToValue(pair.collateral.interestRateInfo.supplyAPY, 25)
-    : 0
-  const baseBorrow = nanoToValue(pair.borrow.interestRateInfo.borrowAPY, 25)
+  const baseSupply = getVaultSupplyApy(pair.collateral)
+  const baseBorrow = getVaultBorrowApy(pair.borrow)
   modal.open(VaultNetApyPairModal, {
     props: {
       supplyAPY: baseSupply,
@@ -218,7 +207,7 @@ const onMaxRoeInfoIconClick = (event: MouseEvent) => {
       maxMultiplier: maxMultiplier.value,
       supplyAPY: supplyApyWithRewards.value,
       borrowAPY: borrowApyWithRewards.value,
-      borrowLTV: nanoToValue(pair.borrowLTV, 2),
+      borrowLTV: ltvToPercent(pair.ltv.borrowLTV),
       borrowVaultAddress: pair.borrow.address,
       collateralAddress: pair.collateral.address,
     },

@@ -2,7 +2,7 @@
 import { useAccount } from '@wagmi/vue'
 import { getAddress, type Address, zeroAddress } from 'viem'
 import { FixedPoint } from '~/utils/fixed-point'
-import type { Vault, VaultAsset } from '~/entities/vault'
+import type { EVault, VaultAsset } from '~/entities/vault'
 import type { SwapTokenSelectMeta } from '~/components/entities/asset/SwapTokenSelector.vue'
 import { getUtilisationWarning } from '~/composables/useVaultWarnings'
 import {
@@ -218,7 +218,7 @@ watch(selectedOutputAsset, () => {
               v-model="form.amount.value"
               label="Withdraw amount"
               :asset="form.asset.value"
-              :vault="(form.collateralVault.value as Vault)"
+              :vault="(form.collateralVault.value as EVault)"
               :balance="form.collateralAssets.value"
               maxable
             />

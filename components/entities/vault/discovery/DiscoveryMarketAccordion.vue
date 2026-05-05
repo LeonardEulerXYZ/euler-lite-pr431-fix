@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { maxUint256 } from 'viem'
 import type { MarketGroup } from '~/entities/lend-discovery'
-import type { Vault, SecuritizeVault, AnyBorrowVaultPair } from '~/entities/vault'
+import type { EVault, SecuritizeCollateralVault, AnyBorrowVaultPair } from '~/entities/vault'
 import { formatCompactUsdValue } from '~/utils/string-utils'
 import { formatAssetValue } from '~/services/pricing/priceProvider'
 import {
@@ -89,19 +89,18 @@ const formatUsdOrDisplay = (p: { hasPrice: boolean, usdValue: number, display: s
 
 const loadVaultUsdValues = async (market: MarketGroup) => {
   const newEntries = new Map(vaultUsdCache.value)
-  const allVaults = [...market.vaults, ...market.externalCollateral.filter(isMatrixCompatibleVault)]
+  const allVaults = [...market.vaults, ...market.externalCollateral].filter(isMatrixCompatibleVault)
 
   await Promise.all(
     allVaults.map(async (vault) => {
       const addr = getVaultAddress(vault).toLowerCase()
       if (!addr || newEntries.has(addr)) return
       const totalAssets = 'totalAssets' in vault ? vault.totalAssets as bigint : 0n
-      const supply = 'supply' in vault ? vault.supply as bigint : totalAssets
-      const borrow = 'borrow' in vault ? vault.borrow as bigint : 0n
-      const supplyCapRaw = 'supplyCap' in vault ? vault.supplyCap as bigint : maxUint256
-      const borrowCapRaw = 'borrowCap' in vault ? vault.borrowCap as bigint : maxUint256
+      const borrow = 'totalBorrowed' in vault ? vault.totalBorrowed as bigint : 0n
+      const supplyCapRaw = 'caps' in vault ? vault.caps.supplyCap : ('supplyCap' in vault ? vault.supplyCap as bigint : maxUint256)
+      const borrowCapRaw = 'caps' in vault ? vault.caps.borrowCap : maxUint256
 
-      const liquidity = supply >= borrow ? supply - borrow : 0n
+      const liquidity = 'availableLiquidity' in vault ? vault.availableLiquidity : 0n
       const supplyCapHasPrice = supplyCapRaw > 0n && supplyCapRaw < maxUint256
       const borrowCapHasPrice = borrowCapRaw > 0n && borrowCapRaw < maxUint256
 
@@ -241,7 +240,7 @@ const onCellClick = (marketId: string, collateralAddr: string, liabilityAddr: st
 
 // -- Selection → vault resolution --
 
-const getSelectedLendVault = (market: MarketGroup): Vault | SecuritizeVault | null => {
+const getSelectedLendVault = (market: MarketGroup): EVault | SecuritizeCollateralVault | null => {
   if (!selectedCell.value || selectedCell.value.marketId !== market.id) return null
   return findVault(market, selectedCell.value.liabilityAddr)
 }
@@ -258,15 +257,11 @@ const getSelectedBorrowPair = (market: MarketGroup): AnyBorrowVaultPair | null =
   return {
     borrow,
     collateral,
-    borrowLTV: cell.ltv.borrowLTV,
-    liquidationLTV: cell.ltv.liquidationLTV,
-    initialLiquidationLTV: cell.ltv.initialLiquidationLTV,
-    targetTimestamp: cell.ltv.targetTimestamp,
-    rampDuration: cell.ltv.rampDuration,
+    ltv: cell.ltv,
   } as AnyBorrowVaultPair
 }
 
-const getMatrixHeaderVault = (market: MarketGroup): Vault | SecuritizeVault | null => {
+const getMatrixHeaderVault = (market: MarketGroup): EVault | SecuritizeCollateralVault | null => {
   if (!selectedMatrixHeader.value || selectedMatrixHeader.value.marketId !== market.id) return null
   return findVault(market, selectedMatrixHeader.value.address)
 }
@@ -282,18 +277,14 @@ const getMatrixHeaderBorrowPairs = (market: MarketGroup): AnyBorrowVaultPair[] =
   if (selectedMatrixHeader.value.axis === 'column') {
     for (const [collateralAddr, rowCells] of matrix.cells) {
       const cell = rowCells.get(addr)
-      if (!cell || cell.ltv.borrowLTV <= 0n) continue
+      if (!cell || cell.ltv.borrowLTV <= 0) continue
       const collateral = findVault(market, collateralAddr)
       const borrow = findVault(market, addr)
       if (!collateral || !borrow || !isVaultType(borrow)) continue
       pairs.push({
         borrow,
         collateral,
-        borrowLTV: cell.ltv.borrowLTV,
-        liquidationLTV: cell.ltv.liquidationLTV,
-        initialLiquidationLTV: cell.ltv.initialLiquidationLTV,
-        targetTimestamp: cell.ltv.targetTimestamp,
-        rampDuration: cell.ltv.rampDuration,
+        ltv: cell.ltv,
       } as AnyBorrowVaultPair)
     }
   }
@@ -301,18 +292,14 @@ const getMatrixHeaderBorrowPairs = (market: MarketGroup): AnyBorrowVaultPair[] =
     const rowCells = matrix.cells.get(addr)
     if (!rowCells) return []
     for (const [liabilityAddr, cell] of rowCells) {
-      if (cell.ltv.borrowLTV <= 0n) continue
+      if (cell.ltv.borrowLTV <= 0) continue
       const collateral = findVault(market, addr)
       const borrow = findVault(market, liabilityAddr)
       if (!collateral || !borrow || !isVaultType(borrow)) continue
       pairs.push({
         borrow,
         collateral,
-        borrowLTV: cell.ltv.borrowLTV,
-        liquidationLTV: cell.ltv.liquidationLTV,
-        initialLiquidationLTV: cell.ltv.initialLiquidationLTV,
-        targetTimestamp: cell.ltv.targetTimestamp,
-        rampDuration: cell.ltv.rampDuration,
+        ltv: cell.ltv,
       } as AnyBorrowVaultPair)
     }
   }
@@ -320,7 +307,7 @@ const getMatrixHeaderBorrowPairs = (market: MarketGroup): AnyBorrowVaultPair[] =
   return pairs
 }
 
-const getGraphSelectedVault = (market: MarketGroup): Vault | SecuritizeVault | null => {
+const getGraphSelectedVault = (market: MarketGroup): EVault | SecuritizeCollateralVault | null => {
   if (!selectedGraphNode.value || selectedGraphNode.value.marketId !== market.id) return null
   return findVault(market, selectedGraphNode.value.address)
 }
@@ -335,18 +322,14 @@ const getGraphBorrowPairs = (market: MarketGroup): AnyBorrowVaultPair[] => {
 
   for (const [collateralAddr, rowCells] of matrix.cells) {
     const cell = rowCells.get(selectedAddr)
-    if (!cell || cell.ltv.borrowLTV <= 0n) continue
+    if (!cell || cell.ltv.borrowLTV <= 0) continue
     const collateral = findVault(market, collateralAddr)
     const borrow = findVault(market, selectedAddr)
     if (!collateral || !borrow || !isVaultType(borrow)) continue
     pairs.push({
       borrow,
       collateral,
-      borrowLTV: cell.ltv.borrowLTV,
-      liquidationLTV: cell.ltv.liquidationLTV,
-      initialLiquidationLTV: cell.ltv.initialLiquidationLTV,
-      targetTimestamp: cell.ltv.targetTimestamp,
-      rampDuration: cell.ltv.rampDuration,
+      ltv: cell.ltv,
     } as AnyBorrowVaultPair)
   }
 
@@ -417,7 +400,7 @@ onMounted(() => {
                 />
                 <SecuritizeVaultItem
                   v-else
-                  :vault="vault as SecuritizeVault"
+                  :vault="vault as SecuritizeCollateralVault"
                 />
               </template>
             </div>
@@ -568,7 +551,7 @@ onMounted(() => {
                           />
                           <SecuritizeVaultItem
                             v-else
-                            :vault="vault as SecuritizeVault"
+                            :vault="vault as SecuritizeCollateralVault"
                           />
                         </template>
                       </template>
@@ -604,7 +587,7 @@ onMounted(() => {
                           />
                           <SecuritizeVaultItem
                             v-else
-                            :vault="lendVault as SecuritizeVault"
+                            :vault="lendVault as SecuritizeCollateralVault"
                           />
                         </template>
                       </template>
@@ -641,7 +624,7 @@ onMounted(() => {
                         />
                         <SecuritizeVaultItem
                           v-else
-                          :vault="vault as SecuritizeVault"
+                          :vault="vault as SecuritizeCollateralVault"
                         />
                       </template>
                     </template>

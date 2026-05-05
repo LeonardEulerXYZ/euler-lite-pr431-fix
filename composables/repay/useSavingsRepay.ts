@@ -5,7 +5,7 @@ import { logWarn } from '~/utils/errorHandling'
 import { useModal } from '~/components/ui/composables/useModal'
 import { OperationReviewModal } from '#components'
 import { useToast } from '~/components/ui/composables/useToast'
-import { isEVKVault, type Vault, type SecuritizeVault } from '~/entities/vault'
+import { isEVault, type EVault, type SecuritizeCollateralVault } from '~/entities/vault'
 import { getAssetUsdValue } from '~/services/pricing/priceProvider'
 import type { AccountBorrowPosition } from '~/entities/account'
 import type { TxPlan } from '~/entities/txPlan'
@@ -69,7 +69,7 @@ export const useSavingsRepay = (options: UseSavingsRepayOptions) => {
   const { savingsPositions, savingsVaults, savingsOptions, getSavingsPosition } = useRepaySavingsOptions()
 
   // --- Source vault state ---
-  const sourceVault: Ref<Vault | undefined> = ref()
+  const sourceVault: Ref<EVault | undefined> = ref()
   const sourceAssets = ref(0n)
   const sourceBalance = computed(() => sourceAssets.value)
   const debtBalance = computed(() => position.value?.borrowed || 0n)
@@ -110,12 +110,12 @@ export const useSavingsRepay = (options: UseSavingsRepayOptions) => {
   // --- Savings-specific computeds ---
   const collateralAmountAfter = computed(() => {
     if (!collateralVault.value || !position.value) return null
-    return nanoToValue(position.value.supplied || 0n, collateralVault.value.decimals)
+    return nanoToValue(position.value.supplied || 0n, collateralVault.value.shares.decimals)
   })
 
   const nextLiquidationLtv = computed(() => {
     if (!position.value) return null
-    return nanoToValue(position.value.liquidationLTV, 2)
+    return ltvToPercent(position.value.liquidationLTV)
   })
 
   // --- 4th USD watcher: primary collateral value (unchanged for savings) ---
@@ -166,21 +166,21 @@ export const useSavingsRepay = (options: UseSavingsRepayOptions) => {
 
   const savingsRepayPlannedOps = computed<PlannedOp[]>(() => {
     const steps: PlannedOp[] = []
-    if (sourceVault.value) steps.push({ vault: sourceVault.value as Vault, op: OP_WITHDRAW })
+    if (sourceVault.value) steps.push({ vault: sourceVault.value as EVault, op: OP_WITHDRAW })
     if (borrowVault.value) {
-      steps.push({ vault: borrowVault.value as Vault, op: OP_SKIM })
-      steps.push({ vault: borrowVault.value as Vault, op: OP_REPAY_WITH_SHARES })
+      steps.push({ vault: borrowVault.value as EVault, op: OP_SKIM })
+      steps.push({ vault: borrowVault.value as EVault, op: OP_REPAY_WITH_SHARES })
     }
     if (isEffectivelyFullRepay.value) {
       // Full repay sweeps all enabled collaterals via transferFromMax.
       const collateralAddresses = position.value?.collaterals ?? []
       for (const addr of collateralAddresses) {
-        const vault = registryGetVault(addr) as Vault | SecuritizeVault | undefined
-        if (vault && isEVKVault(vault)) {
+        const vault = registryGetVault(addr) as EVault | SecuritizeCollateralVault | undefined
+        if (vault && isEVault(vault)) {
           steps.push({ vault, op: OP_TRANSFER })
         }
       }
-      if (sourceVault.value) steps.push({ vault: sourceVault.value as Vault, op: OP_TRANSFER })
+      if (sourceVault.value) steps.push({ vault: sourceVault.value as EVault, op: OP_TRANSFER })
     }
     return steps
   })
@@ -197,7 +197,7 @@ export const useSavingsRepay = (options: UseSavingsRepayOptions) => {
   })
   const isInsufficientSource = computed(() => requiredInput.value > 0n && requiredInput.value > sourceBalance.value)
   const isInsufficientVaultLiquidity = computed(() =>
-    requiredInput.value > 0n && requiredInput.value > (sourceVault.value?.totalCash || 0n),
+    requiredInput.value > 0n && requiredInput.value > (sourceVault.value?.availableLiquidity ?? 0n),
   )
   const liquidityWarning = computed<VaultWarning | null>(() => {
     if (!sourceVault.value) return null
@@ -343,7 +343,7 @@ export const useSavingsRepay = (options: UseSavingsRepayOptions) => {
       const transferAmounts: Record<string, string> = {}
       if (collateralVault.value && position.value?.supplied) {
         const addr = collateralVault.value.address.toLowerCase()
-        transferAmounts[addr] = nanoToValue(position.value.supplied, collateralVault.value.decimals).toString()
+        transferAmounts[addr] = nanoToValue(position.value.supplied, collateralVault.value.shares.decimals).toString()
       }
 
       modal.open(OperationReviewModal, {
@@ -394,7 +394,7 @@ export const useSavingsRepay = (options: UseSavingsRepayOptions) => {
 
   const initVault = () => {
     if (savingsVaults.value.length > 0) {
-      sourceVault.value = savingsVaults.value[0] as Vault
+      sourceVault.value = savingsVaults.value[0] as EVault
       updateSourceBalance()
     }
   }

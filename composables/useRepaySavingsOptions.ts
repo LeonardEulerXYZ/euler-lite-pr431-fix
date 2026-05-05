@@ -3,7 +3,7 @@ import { getVaultProductName } from '~/utils/eulerLabelsUtils'
 import { useIntrinsicApy } from '~/composables/useIntrinsicApy'
 import { useVaultRegistry } from '~/composables/useVaultRegistry'
 import type { AccountDepositPosition } from '~/entities/account'
-import type { Vault } from '~/entities/vault'
+import type { EVault } from '~/entities/vault'
 import { getAssetUsdValueOrZero } from '~/services/pricing/priceProvider'
 import { nanoToValue } from '~/utils/crypto-utils'
 import { useReactiveMap } from '~/composables/useReactiveMap'
@@ -32,7 +32,7 @@ export const useRepaySavingsOptions = () => {
   })
 
   const savingsVaults = computed(() => {
-    return savingsPositions.value.map(position => position.vault as Vault)
+    return savingsPositions.value.map(position => position.vault as EVault)
   })
 
   const savingsOptions = useReactiveMap(
@@ -41,7 +41,7 @@ export const useRepaySavingsOptions = () => {
     async (position) => {
       const vault = position.vault
       const amount = nanoToValue(position.assets, vault.asset.decimals)
-      const baseApy = nanoToValue(vault.interestRateInfo.supplyAPY || 0n, 25)
+      const baseApy = getVaultSupplyApy(vault)
       const apy = withIntrinsicSupplyApy(baseApy, vault.asset.address) + getSupplyRewardApy(vault.address)
       return {
         type: 'vault' as const,
@@ -50,7 +50,7 @@ export const useRepaySavingsOptions = () => {
         apy,
         symbol: vault.asset.symbol,
         assetAddress: vault.asset.address,
-        label: getVaultProductName(vault.address) || vault.name,
+        label: getVaultProductName(vault.address) || vault.shares.name,
         vaultAddress: vault.address,
       }
     },

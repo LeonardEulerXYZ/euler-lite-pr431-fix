@@ -4,11 +4,11 @@ import { getAssetUsdValue, formatAssetValue } from '~/services/pricing/priceProv
 import { isVaultBlockedByCountry } from '~/composables/useGeoBlock'
 import { isVaultDeprecated, getVaultNotice } from '~/utils/eulerLabelsUtils'
 import { type AccountDepositPosition, getSubAccountIndex } from '~/entities/account'
-import type { EarnVault } from '~/entities/vault'
+import type { EulerEarn } from '~/entities/vault'
 import { VaultOverviewModal, VaultSupplyApyModal } from '#components'
 import { useModal } from '~/components/ui/composables/useModal'
 import { formatNumber, formatCompactUsdValue, compactNumber, formatExactAmount } from '~/utils/string-utils'
-import { nanoToValue, roundAndCompactTokens } from '~/utils/crypto-utils'
+import { roundAndCompactTokens } from '~/utils/crypto-utils'
 
 const { position } = defineProps<{ position: AccountDepositPosition }>()
 const modal = useModal()
@@ -24,15 +24,16 @@ const subAccountIndex = computed(() => {
 const { getSupplyRewardApy, hasSupplyRewards, getSupplyRewardCampaigns } = useRewardsApy()
 const { getIntrinsicApy, getIntrinsicApyInfo } = useIntrinsicApy()
 
-const vault = computed(() => position.vault as EarnVault)
+const vault = computed(() => position.vault as EulerEarn)
 const rewardsExist = computed(() => hasSupplyRewards(vault.value.address))
+const { isVerifiedVault } = useVaultRegistry()
 
 const product = useEulerProductOfVault(computed(() => vault.value.address))
 const isGeoBlocked = computed(() => isVaultBlockedByCountry(vault.value.address))
 const isDeprecated = computed(() => isVaultDeprecated(vault.value.address))
-const isUnverified = computed(() => 'verified' in vault.value && !vault.value.verified)
+const isUnverified = computed(() => !isVerifiedVault(vault.value.address))
 const vaultNotice = computed(() => getVaultNotice(vault.value.address))
-const displayName = computed(() => product.name || vault.value.name)
+const displayName = computed(() => product.name || vault.value.shares.name)
 
 const supplyValueDisplay = ref('-')
 
@@ -45,7 +46,7 @@ watchEffect(() => {
   updateSupplyValueDisplay()
 })
 
-const supplyApyWithRewards = computed(() => nanoToValue(vault.value.interestRateInfo.supplyAPY, 25) + getSupplyRewardApy(vault.value.address))
+const supplyApyWithRewards = computed(() => getVaultSupplyApy(vault.value) + getSupplyRewardApy(vault.value.address))
 
 const hasPrice = ref(false)
 
@@ -79,7 +80,7 @@ const onSupplyInfoIconClick = (event: MouseEvent) => {
   event.stopPropagation()
   modal.open(VaultSupplyApyModal, {
     props: {
-      lendingAPY: nanoToValue(vault.value.interestRateInfo.supplyAPY, 25),
+      lendingAPY: getVaultSupplyApy(vault.value),
       intrinsicAPY: getIntrinsicApy(vault.value.asset.address),
       intrinsicApyInfo: getIntrinsicApyInfo(vault.value.asset.address),
       campaigns: getSupplyRewardCampaigns(vault.value.address),

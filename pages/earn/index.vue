@@ -3,7 +3,7 @@ import { useVaults } from '~/composables/useVaults'
 import { useVaultRegistry } from '~/composables/useVaultRegistry'
 import { useEulerAddresses } from '~/composables/useEulerAddresses'
 import { getAssetLogoUrl } from '~/composables/useTokenList'
-import type { EarnVault } from '~/entities/vault'
+import type { EulerEarn } from '~/entities/vault'
 import { getAssetUsdValueOrZero } from '~/services/pricing/priceProvider'
 import { getProductByVault, applyVaultOverrides, getEntitiesByEarnVault, isVaultFeatured, isVaultDeprecated, isEarnVaultNotExplorable } from '~/utils/eulerLabelsUtils'
 import { getEulerLabelEntityLogo } from '~/entities/euler/labels'
@@ -20,18 +20,18 @@ const { isEarnUpdating } = useVaults()
 const isPricesReady = ref(false)
 const isLoading = computed(() => isEarnUpdating.value || !isPricesReady.value)
 const { isSlow } = useSlowLoading(isLoading)
-const { getEarnVaults } = useVaultRegistry()
+const { getEarnVaults, isVerifiedVault } = useVaultRegistry()
 const { chainId } = useEulerAddresses()
-const list = computed(() => getEarnVaults().filter(v => v.verified && !isEarnVaultNotExplorable(v.address)))
+const list = computed(() => getEarnVaults().filter(v => isVerifiedVault(v.address) && !isEarnVaultNotExplorable(v.address)))
 
 const { enableEntityBranding } = useDeployConfig()
 
-const { searchQuery, matchesSearch, clearSearch } = useVaultSearch<EarnVault>((vault) => {
+const { searchQuery, matchesSearch, clearSearch } = useVaultSearch<EulerEarn>((vault) => {
   const product = applyVaultOverrides(getProductByVault(vault.address), vault.address)
   return [
     vault.asset.symbol,
     vault.asset.name,
-    vault.name,
+    vault.shares.name,
     product.name,
     product.description,
     ...getEntitiesByEarnVault(vault).map(e => e.name),
@@ -107,7 +107,7 @@ const {
   clearCustomFilters,
   openCustomFilterModal,
   matchesCustomFilters,
-} = useCustomFilters<EarnVault>(
+} = useCustomFilters<EulerEarn>(
   [
     { key: 'totalSupply', label: 'Total supply', shortLabel: 'Total supply', unit: 'usd' },
     { key: 'liquidity', label: 'Available liquidity', shortLabel: 'Avail. liquidity', unit: 'usd' },
@@ -174,22 +174,22 @@ const applyDeprecatedSort = <T extends { address: string }>(sorted: T[]): T[] =>
 }
 
 const sortedList = computed(() => {
-  let sorted: EarnVault[]
+  let sorted: EulerEarn[]
   switch (sortBy.value) {
     case 'Total Supply':
-      sorted = applyFeaturedSort([...filteredList.value].sort((a: EarnVault, b: EarnVault) => {
+      sorted = applyFeaturedSort([...filteredList.value].sort((a: EulerEarn, b: EulerEarn) => {
         const aValue = vaultTotalSupplyUsd.value.get(a.address) ?? 0
         const bValue = vaultTotalSupplyUsd.value.get(b.address) ?? 0
         return bValue - aValue
       }))
       break
     case 'Supply APY':
-      sorted = applyFeaturedSort([...filteredList.value].sort((a: EarnVault, b: EarnVault) => {
-        return Number(b.interestRateInfo.supplyAPY) - Number(a.interestRateInfo.supplyAPY)
+      sorted = applyFeaturedSort([...filteredList.value].sort((a: EulerEarn, b: EulerEarn) => {
+        return Number(getVaultSupplyApy(b)) - Number(getVaultSupplyApy(a))
       }))
       break
     case 'Liquidity':
-      sorted = applyFeaturedSort([...filteredList.value].sort((a: EarnVault, b: EarnVault) => {
+      sorted = applyFeaturedSort([...filteredList.value].sort((a: EulerEarn, b: EulerEarn) => {
         const aValue = vaultLiquidityUsd.value.get(a.address) ?? 0
         const bValue = vaultLiquidityUsd.value.get(b.address) ?? 0
         return bValue - aValue
