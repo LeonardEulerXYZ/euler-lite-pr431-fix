@@ -15,7 +15,7 @@ import {
   getPairRampConfig,
 } from '~/utils/borrow-pair'
 import { useModal } from '~/components/ui/composables/useModal'
-import { VaultNetApyPairModal, VaultMaxRoeModal, VaultRampDownModal } from '#components'
+import { VaultNetApyPairModal, VaultMaxRoeModal, VaultRampDownModal, VaultSupplyApyModal, VaultBorrowApyModal } from '#components'
 
 const { pair } = defineProps<{ pair: AnyBorrowVaultPair | PortfolioBorrowPosition<VaultEntity> }>()
 
@@ -35,15 +35,10 @@ const isRamping = computed(() =>
 )
 
 const modal = useModal()
-const { withIntrinsicBorrowApy, withIntrinsicSupplyApy, getIntrinsicApy } = useIntrinsicApy()
+const { withIntrinsicBorrowApy, withIntrinsicSupplyApy, getIntrinsicApy, getIntrinsicApyInfo } = useIntrinsicApy()
 const { getSupplyRewardApy, getBorrowRewardApy, getLoopingRewardApy, getSupplyRewardCampaigns, getBorrowRewardCampaigns, getLoopingRewardCampaigns, hasSupplyRewards, hasBorrowRewards, hasLoopingRewards } = useRewardsApy()
-const { borrowList } = useVaults()
 
-const borrowCount = computed(() => {
-  return borrowList.value.filter(p => p.borrow.address === borrowVault.value.address).length
-})
-
-const isBorrowable = computed(() => borrowCount.value > 0)
+const isBorrowable = computed(() => borrowVault.value.isBorrowable)
 const isRestricted = computed(() => isAnyVaultBlockedByCountry(collateralVault.value.address, borrowVault.value.address))
 const isDeprecated = computed(() => isVaultDeprecated(collateralVault.value.address) || isVaultDeprecated(borrowVault.value.address))
 
@@ -90,6 +85,28 @@ const price = computed(() => {
 
   return nanoToValue(collateralPrice.amountOutMid, 18) / nanoToValue(borrowPrice.amountOutMid, 18)
 })
+
+const onSupplyInfoIconClick = () => {
+  modal.open(VaultSupplyApyModal, {
+    props: {
+      lendingAPY: baseSupplyApy.value,
+      intrinsicAPY: intrinsicSupplyApy.value,
+      intrinsicApyInfo: getIntrinsicApyInfo(collateralVault.value.asset.address),
+      campaigns: supplyCampaignsForModal.value,
+    },
+  })
+}
+
+const onBorrowInfoIconClick = () => {
+  modal.open(VaultBorrowApyModal, {
+    props: {
+      borrowingAPY: baseBorrowApy.value,
+      intrinsicAPY: intrinsicBorrowApy.value,
+      intrinsicApyInfo: getIntrinsicApyInfo(borrowVault.value.asset.address),
+      campaigns: borrowCampaignsForModal.value,
+    },
+  })
+}
 
 const onNetApyInfoIconClick = () => {
   modal.open(VaultNetApyPairModal, {
@@ -195,6 +212,48 @@ const onRampDownInfoIconClick = (event: MouseEvent, pair: EVaultCollateral) => {
           label="Max multiplier"
           :value="pairBorrowLTVPercent === null ? '-' : `${formatNumber(maxMultiplier, 2, 2)}x`"
         />
+        <VaultOverviewLabelValue>
+          <template #label>
+            <span class="flex items-center gap-4">
+              Supply APY
+              <SvgIcon
+                class="!w-20 !h-20 text-content-muted cursor-pointer hover:text-content-secondary"
+                name="info-circle"
+                @click="onSupplyInfoIconClick"
+              />
+            </span>
+          </template>
+          <span class="flex items-center gap-4">
+            <SvgIcon
+              v-if="hasSupplyRewards(collateralVault.address)"
+              class="!w-20 !h-20 text-accent-500 cursor-pointer"
+              name="sparks"
+              @click="onSupplyInfoIconClick"
+            />
+            {{ formatNumber(supplyApyWithRewards) }}%
+          </span>
+        </VaultOverviewLabelValue>
+        <VaultOverviewLabelValue>
+          <template #label>
+            <span class="flex items-center gap-4">
+              Borrow APY
+              <SvgIcon
+                class="!w-20 !h-20 text-content-muted cursor-pointer hover:text-content-secondary"
+                name="info-circle"
+                @click="onBorrowInfoIconClick"
+              />
+            </span>
+          </template>
+          <span class="flex items-center gap-4">
+            <SvgIcon
+              v-if="hasBorrowRewards(borrowVault.address, collateralVault.address)"
+              class="!w-20 !h-20 text-accent-500 cursor-pointer"
+              name="sparks"
+              @click="onBorrowInfoIconClick"
+            />
+            {{ formatNumber(borrowApyWithRewards) }}%
+          </span>
+        </VaultOverviewLabelValue>
         <VaultOverviewLabelValue>
           <template #label>
             <span class="flex items-center gap-4">

@@ -6,14 +6,9 @@ import { getVaultHookTarget } from '~/utils/vault-hooks'
 
 const { vault } = defineProps<{ vault: EVault }>()
 
-const { borrowList } = useVaults()
 const { chainId } = useEulerAddresses()
 
-const borrowCount = computed(() => {
-  return borrowList.value.filter(pair => pair.borrow.address === vault.address).length
-})
-
-const isBorrowable = computed(() => borrowCount.value > 0)
+const isBorrowable = computed(() => vault.isBorrowable)
 
 const interestRateModelAddress = computed(() =>
   vault.interestRateModel.address,
