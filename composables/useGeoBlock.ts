@@ -6,9 +6,11 @@ import {
   getEarnVaultRestricted,
   getAssetBlock,
   getAssetRestricted,
+  getAssetPatternRules,
   isVaultDeprecated,
 } from '~/utils/eulerLabelsUtils'
-import { assetPatternRules, type CompiledPatternRule } from '~/utils/eulerLabelsState'
+import type { EulerLabelAssetPatternRule } from '@eulerxyz/euler-v2-sdk'
+import { getEulerLabelsVersion } from '~/composables/useEulerLabels'
 import { useVaultRegistry } from '~/composables/useVaultRegistry'
 import { SANCTIONED_COUNTRIES, COUNTRY_GROUPS } from '~/entities/constants'
 
@@ -76,15 +78,14 @@ const MAX_REGEX_INPUT_LEN = 128
 // render; the pattern-rule scan is O(rules) which adds up. Cache key
 // composes country + address + symbol + name so a country change (rare) or
 // a new unique asset produces a fresh entry without ever serving stale data.
-// Pattern-rule content lives in module-scoped `assetPatternRules`; the
-// labels loader calls `clearAssetGeoCache()` after repopulating that list
-// so we never serve a decision computed against removed rules.
+// Pattern-rule content comes from the current SDK labels snapshot. Include the
+// labels version in the key so a refreshed snapshot cannot reuse old decisions.
 const MAX_ASSET_CACHE_SIZE = 1000
 const assetBlockCache = new Map<string, boolean>()
 const assetRestrictedCache = new Map<string, boolean>()
 
 const makeAssetCacheKey = (fields: { address?: string, symbol?: string, name?: string }): string =>
-  `${country.value ?? ''}|${fields.address?.toLowerCase() ?? ''}|${fields.symbol?.toLowerCase() ?? ''}|${fields.name?.toLowerCase() ?? ''}`
+  `${getEulerLabelsVersion()}|${country.value ?? ''}|${fields.address?.toLowerCase() ?? ''}|${fields.symbol?.toLowerCase() ?? ''}|${fields.name?.toLowerCase() ?? ''}`
 
 const cacheSet = (cache: Map<string, boolean>, key: string, value: boolean): boolean => {
   if (cache.size >= MAX_ASSET_CACHE_SIZE) cache.clear()
@@ -99,7 +100,7 @@ export const clearAssetGeoCache = (): void => {
 
 // Test whether a pattern rule matches the given symbol/name (lowercase inputs).
 // OR across populated fields — any match wins.
-const patternRuleMatches = (rule: CompiledPatternRule, symbolLower: string | undefined, nameLower: string | undefined): boolean => {
+const patternRuleMatches = (rule: EulerLabelAssetPatternRule, symbolLower: string | undefined, nameLower: string | undefined): boolean => {
   if (rule.symbolsLower && symbolLower && rule.symbolsLower.has(symbolLower)) return true
   if (rule.symbolRegex && symbolLower && symbolLower.length <= MAX_REGEX_INPUT_LEN && rule.symbolRegex.test(symbolLower)) return true
   if (rule.namesLower && nameLower && rule.namesLower.has(nameLower)) return true
@@ -153,7 +154,7 @@ export const isAssetBlockedByCountry = (asset: AssetLike): boolean => {
   const symbolLower = fields.symbol?.toLowerCase()
   const nameLower = fields.name?.toLowerCase()
   if (symbolLower || nameLower) {
-    for (const rule of assetPatternRules) {
+    for (const rule of getAssetPatternRules()) {
       if (!rule.block?.length) continue
       if (!patternRuleMatches(rule, symbolLower, nameLower)) continue
       if (isCountryInList(expandBlockList(rule.block))) {
@@ -185,7 +186,7 @@ export const isAssetRestrictedByCountry = (asset: AssetLike): boolean => {
   const symbolLower = fields.symbol?.toLowerCase()
   const nameLower = fields.name?.toLowerCase()
   if (symbolLower || nameLower) {
-    for (const rule of assetPatternRules) {
+    for (const rule of getAssetPatternRules()) {
       if (!rule.restricted?.length) continue
       if (!patternRuleMatches(rule, symbolLower, nameLower)) continue
       if (isCountryInList(expandBlockList(rule.restricted))) {
