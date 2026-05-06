@@ -8,6 +8,7 @@ import { getProductKeyByVault } from '~/utils/eulerLabelsUtils'
 import { getEulerLabelEntityLogo } from '~/entities/euler/labels'
 import { isVaultBlockedByCountry } from '~/composables/useGeoBlock'
 import { autoLink } from '~/utils/autoLink'
+import { normalizeAddress } from '~/utils/normalizeAddress'
 
 const { vault } = defineProps<{ vault: EVault }>()
 const route = useRoute()
@@ -33,7 +34,7 @@ const isGovernanceLimited = computed(() => product.isGovernanceLimited && isGove
 
 // Count how many borrow pairs have this vault as collateral
 const collateralCount = computed(() => {
-  return borrowList.value.filter(pair => pair.collateral.address === vault.address).length
+  return borrowList.value.filter(pair => normalizeAddress(pair.collateral.address) === vaultAddress.value).length
 })
 
 // Count how many borrow pairs have this vault as the liability (borrow) side
