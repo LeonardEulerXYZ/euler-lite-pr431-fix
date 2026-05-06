@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { CollateralOption } from '~/types/collateral-option'
 import { getVaultProductName } from '~/utils/eulerLabelsUtils'
-import type { CollateralOption } from '~/entities/vault'
+
 import { formatNumber } from '~/utils/string-utils'
 
 const emits = defineEmits(['close'])
