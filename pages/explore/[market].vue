@@ -10,10 +10,10 @@ const route = useRoute()
 const marketKey = computed(() => route.params.market as string)
 
 const { marketGroups, isResolvingTVL, fetchMarketGroupOnDemand } = useMarketGroups()
-const { isEVKUpdating, isEarnUpdating, isSecuritizeUpdating, isEscrowUpdating } = useVaults()
+const { isEVaultUpdating, isEarnUpdating, isSecuritizeUpdating, isEscrowUpdating } = useVaults()
 
 const isVaultsLoading = computed(() =>
-  isEVKUpdating.value || isEarnUpdating.value || isSecuritizeUpdating.value || isEscrowUpdating.value
+  isEVaultUpdating.value || isEarnUpdating.value || isSecuritizeUpdating.value || isEscrowUpdating.value
   || isResolvingTVL.value,
 )
 

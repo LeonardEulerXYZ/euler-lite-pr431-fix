@@ -1,26 +1,9 @@
-import {
-  type EulerLabelEntity,
-  type EulerLabelProduct,
-  eulerLabelProductEmpty,
-  type EulerLabelVaultOverride,
-} from '~/entities/euler/labels'
-import type { EulerEarn } from '~/entities/vault'
+import { eulerLabelProductEmpty, type EulerLabelVaultOverride, type EulerLabelProduct, type EulerLabelEntity } from '~/entities/euler/labels'
+import type { EulerEarn } from '@eulerxyz/euler-v2-sdk'
+
 import { type OracleAdapterMeta, OracleAdapterCheckSeverity } from '~/entities/oracle'
 import { normalizeAddress } from '~/utils/normalizeAddress'
-import {
-  products,
-  entities,
-  points,
-  earnVaultBlocks,
-  earnVaultRestrictions,
-  featuredEarnVaults,
-  deprecatedEarnVaults,
-  earnVaultDescriptions,
-  earnVaultNotices,
-  notExplorableEarnVaults,
-  assetBlocks,
-  assetRestrictions,
-} from '~/utils/eulerLabelsState'
+import { products, entities, points, earnVaultBlocks, earnVaultRestrictions, featuredEarnVaults, deprecatedEarnVaults, earnVaultDescriptions, earnVaultNotices, notExplorableEarnVaults, assetBlocks, assetRestrictions } from '~/utils/eulerLabelsState'
 
 // ── Internal helpers ─────────────────────────────────────────
 

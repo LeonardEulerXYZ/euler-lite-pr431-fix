@@ -1,6 +1,6 @@
-import type { Address } from 'viem'
-import { getAddress } from 'viem'
-import type { EVault } from '~/entities/vault'
+import { isEVault, type EVault } from '@eulerxyz/euler-v2-sdk'
+import { getAddress, type Address } from 'viem'
+
 import { logWarn } from '~/utils/errorHandling'
 import type { EulerLabelEntity, EulerLabelProduct } from '~/entities/euler/labels'
 import type { MarketGroup, MarketGroupMetrics, CuratorGroup } from '~/entities/lend-discovery'
@@ -8,28 +8,23 @@ import type { AnyVault } from '~/composables/useVaultRegistry'
 import { getAssetUsdValueOrZero } from '~/services/pricing/priceProvider'
 import { isVaultNotExplorable, isVaultFeatured } from '~/utils/eulerLabelsUtils'
 
-// -- Helpers --
-
-const isVaultType = (vault: AnyVault): vault is EVault =>
-  !('type' in vault) || (vault as { type?: string }).type === undefined
-
 const isBorrowableVault = (vault: AnyVault): boolean => {
-  if (!isVaultType(vault)) return false
+  if (!isEVault(vault)) return false
   const { getVaultCategory } = useVaultRegistry()
   if (getVaultCategory(vault.address) === 'escrow') return false
   return vault.collaterals.some(ltv => ltv.borrowLTV > 0)
 }
 
 const getCollateralAddresses = (vault: AnyVault): string[] => {
-  if (!isVaultType(vault)) return []
+  if (!isEVault(vault)) return []
   return vault.collaterals.map(ltv => ltv.address)
 }
 
 const getVaultAddress = (vault: AnyVault): string =>
-  isVaultType(vault) ? vault.address : ('address' in vault ? (vault as { address: string }).address : '')
+  isEVault(vault) ? vault.address : ('address' in vault ? (vault as { address: string }).address : '')
 
 const getAssetSymbol = (vault: AnyVault): string => {
-  if (isVaultType(vault)) return vault.asset.symbol
+  if (isEVault(vault)) return vault.asset.symbol
   if ('asset' in vault && vault.asset && typeof vault.asset === 'object' && 'symbol' in (vault.asset as unknown as Record<string, unknown>)) {
     return (vault.asset as unknown as { symbol: string }).symbol
   }
@@ -37,14 +32,14 @@ const getAssetSymbol = (vault: AnyVault): string => {
 }
 
 const getSupplyAPY = (vault: AnyVault): number => {
-  if (isVaultType(vault)) {
+  if (isEVault(vault)) {
     return getVaultSupplyApy(vault)
   }
   return 0
 }
 
 const getBorrowAPY = (vault: AnyVault): number => {
-  if (!isVaultType(vault)) return 0
+  if (!isEVault(vault)) return 0
   return getVaultBorrowApy(vault)
 }
 
@@ -262,7 +257,7 @@ const computeMetricsSync = (vaults: AnyVault[]): MarketGroupMetrics => {
       if (bestBorrowAPY === 0 || (borrowAPY > 0 && borrowAPY < bestBorrowAPY)) {
         bestBorrowAPY = borrowAPY
       }
-      if (isVaultType(vault)) {
+      if (isEVault(vault)) {
         totalUtilization += vault.utilization
       }
     }
@@ -300,7 +295,7 @@ const resolveGroupTVL = async (group: MarketGroup): Promise<MarketGroup> => {
       const borrowable = isBorrowableVault(vault)
       let liquidity = 0
       let borrowUsd = 0
-      if (borrowable && usdValue > 0 && isVaultType(vault)) {
+      if (borrowable && usdValue > 0 && isEVault(vault)) {
         borrowUsd = await getAssetUsdValueOrZero(vault.totalBorrowed, vault, 'off-chain')
         liquidity = usdValue - borrowUsd
       }

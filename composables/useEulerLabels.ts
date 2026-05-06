@@ -1,49 +1,16 @@
+import { getAddress } from 'viem'
+import type { EulerLabelEarnVaultEntry, EulerLabelPoint, EulerLabelAssetEntry } from '~/entities/euler/labels'
+import type { EulerEarn, EVault } from '@eulerxyz/euler-v2-sdk'
 /* eslint-disable @typescript-eslint/no-dynamic-delete */
 import axios from 'axios'
-import { getAddress } from 'viem'
-import type { EulerLabelPoint, EulerLabelEarnVaultEntry, EulerLabelAssetEntry } from '~/entities/euler/labels'
-import type { EulerEarn, EVault } from '~/entities/vault'
 import { safeAssign } from '~/utils/safe-assign'
 import { logger } from '~/utils/logger'
 import { logWarn } from '~/utils/errorHandling'
 import { CACHE_TTL_5MIN_MS } from '~/entities/tuning-constants'
 import { normalizeAddress } from '~/utils/normalizeAddress'
 import { clearAssetGeoCache } from '~/composables/useGeoBlock'
-import {
-  isLoading,
-  isReady,
-  loadState,
-  products,
-  entities,
-  points,
-  earnVaults,
-  earnVaultBlocks,
-  earnVaultRestrictions,
-  featuredEarnVaults,
-  deprecatedEarnVaults,
-  earnVaultDescriptions,
-  earnVaultNotices,
-  notExplorableEarnVaults,
-  verifiedVaultAddresses,
-  oracleAdapters,
-  loadingAdapters,
-  assetBlocks,
-  assetRestrictions,
-  assetPatternRules,
-  type CompiledPatternRule,
-  bulkLoadedAdapterChains,
-  pendingBulkAdapterLoads,
-} from '~/utils/eulerLabelsState'
-import {
-  normalizeProducts,
-  normalizeEntities,
-  normalizeOracleAdapters,
-  getProductByVault,
-  getEntitiesByVault,
-  getEntitiesByEarnVault,
-  getPointsByVault,
-  applyVaultOverrides,
-} from '~/utils/eulerLabelsUtils'
+import { isLoading, isReady, loadState, products, entities, points, earnVaults, earnVaultBlocks, earnVaultRestrictions, featuredEarnVaults, deprecatedEarnVaults, earnVaultDescriptions, earnVaultNotices, notExplorableEarnVaults, verifiedVaultAddresses, oracleAdapters, loadingAdapters, assetBlocks, assetRestrictions, assetPatternRules, type CompiledPatternRule, bulkLoadedAdapterChains, pendingBulkAdapterLoads } from '~/utils/eulerLabelsState'
+import { normalizeProducts, normalizeEntities, normalizeOracleAdapters, getProductByVault, getEntitiesByVault, getEntitiesByEarnVault, getPointsByVault, applyVaultOverrides } from '~/utils/eulerLabelsUtils'
 
 const loadOracleAdapter = async (chainId: number, oracleAddress: string) => {
   const checksummed = getAddress(oracleAddress)

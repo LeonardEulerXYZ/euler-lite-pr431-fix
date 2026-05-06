@@ -1,9 +1,4 @@
-import { getAddress, formatUnits } from 'viem'
-import { useAccount } from '@wagmi/vue'
-import { logWarn } from '~/utils/errorHandling'
-import { OperationReviewModal, SlippageSettingsModal } from '#components'
-import { usePriceImpactGate } from '~/composables/usePriceImpactGate'
-import type { EVault, SecuritizeCollateralVault } from '~/entities/vault'
+import type { SecuritizeCollateralVault, EVault } from '@eulerxyz/euler-v2-sdk'
 import type { SwapApiQuote } from '~/entities/swap'
 import { getAssetUsdValue } from '~/services/pricing/priceProvider'
 import { useEulerProductOfVault } from '~/composables/useEulerLabels'
@@ -17,6 +12,11 @@ import { useModal } from '~/components/ui/composables/useModal'
 import { useToast } from '~/components/ui/composables/useToast'
 import { isSameUnderlyingAsset, isSameVault as isSameVaultCheck } from '~/utils/vault-utils'
 import { isOperationBlocked } from '~/utils/operationGuardRegistry'
+import { useAccount } from '@wagmi/vue'
+import { getAddress, formatUnits } from 'viem'
+import { SlippageSettingsModal, OperationReviewModal } from '#components'
+import { logWarn } from '~/utils/errorHandling'
+import { usePriceImpactGate } from '~/composables/usePriceImpactGate'
 
 export interface UseSwapPageLogicOptions {
   /** Which quote field the swap engine optimises for ('amountIn' = min cost, 'amountOut' = max output) */

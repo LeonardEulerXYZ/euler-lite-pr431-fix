@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { useAccount } from '@wagmi/vue'
-import { isAddress, getAddress, zeroAddress, type Address } from 'viem'
-import type { EVault, SecuritizeCollateralVault } from '~/entities/vault'
-import { isSecuritizeVault } from '~/entities/vault/factory'
-import { getSubAccountAddress } from '~/entities/account'
+import type { SecuritizeCollateralVault, EVault } from '@eulerxyz/euler-v2-sdk'
+import { getSubAccountAddress } from '@eulerxyz/euler-v2-sdk'
+import { isSecuritizeVault } from '~/utils/vault/categories'
 import { useSwapCollateralOptions } from '~/composables/useSwapCollateralOptions'
 import { SwapperMode } from '~/entities/swap'
 import type { TxPlan } from '~/entities/txPlan'
@@ -13,6 +11,8 @@ import { useSwapPageLogic } from '~/composables/useSwapPageLogic'
 import { normalizeAddress } from '~/utils/normalizeAddress'
 import { isVaultDeprecated } from '~/utils/eulerLabelsUtils'
 import type { DisabledReasonInfo } from '~/components/entities/vault/form/types'
+import { useAccount } from '@wagmi/vue'
+import { getAddress, type Address, zeroAddress, isAddress } from 'viem'
 
 const route = useRoute()
 const { getVault, getSecuritizeVault } = useVaults()
@@ -25,7 +25,7 @@ const { getSupplyRewardApy } = useRewardsApy()
 const subAccountIndex = Number(route.params.subAccount)
 const subAccount = computed(() => {
   if (!address.value || isNaN(subAccountIndex)) return undefined
-  return getSubAccountAddress(address.value, subAccountIndex)
+  return getSubAccountAddress(getAddress(address.value), subAccountIndex)
 })
 
 // ── Vaults ───────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ const savingPosition = computed(() => {
   const currentAddress = normalizeAddress(fromVault.value.address)
   if (!currentAddress) return null
   return depositPositions.value.find(position =>
-    normalizeAddress(position.vault.address) === currentAddress
+    normalizeAddress(position.vault?.address || '') === currentAddress
     && (!subAccount.value || normalizeAddress(position.subAccount) === normalizeAddress(subAccount.value)),
   ) || null
 })

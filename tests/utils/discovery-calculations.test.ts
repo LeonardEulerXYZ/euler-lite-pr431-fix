@@ -4,12 +4,13 @@ import {
   buildAttributeRowCells,
   getActiveExternalCollateral,
   getAttributeRowColor,
+  getAttributeMatrixColumns,
   getCollateralMatrix,
   isNodeRampingDown,
   type VaultUsdCacheEntry,
 } from '~/utils/discoveryCalculations'
 import type { MarketGroup } from '~/entities/lend-discovery'
-import type { EVault, EVaultCollateral } from '~/entities/vault/types'
+import type { EVault, EVaultCollateral, SecuritizeCollateralVault } from '@eulerxyz/euler-v2-sdk'
 
 vi.mock('~/entities/euler/labels', () => ({
   getEulerLabelEntityLogo: () => undefined,
@@ -43,12 +44,23 @@ const makeLtv = (overrides: Partial<any> = {}): EVaultCollateral => ({
 
 const makeVault = (address: string, collaterals: EVaultCollateral[]): EVault =>
   ({
+    type: 'EVault',
     address,
     collaterals,
     asset: { address, symbol: 'TST' },
   }) as unknown as EVault
 
-const makeMarket = (vaults: EVault[], externalCollateral: EVault[] = []): MarketGroup =>
+const makeSecuritizeVault = (address: string): SecuritizeCollateralVault =>
+  ({
+    type: 'SecuritizeCollateral',
+    address,
+    asset: { address, symbol: 'NOTE' },
+  }) as unknown as SecuritizeCollateralVault
+
+const makeMarket = (
+  vaults: Array<EVault | SecuritizeCollateralVault>,
+  externalCollateral: Array<EVault | SecuritizeCollateralVault> = [],
+): MarketGroup =>
   ({
     vaults,
     externalCollateral,
@@ -117,6 +129,24 @@ describe('getCollateralMatrix', () => {
 
     expect(getCollateralMatrix(market)).toBeNull()
   })
+
+  it('includes Securitize member vaults referenced as collateral rows', () => {
+    const borrowVault = makeVault('0xBorrow', [
+      makeLtv({ address: '0xSecuritize', borrowLTV: 0.5 }),
+    ])
+    const securitizeVault = makeSecuritizeVault('0xSecuritize')
+    const market = makeMarket([borrowVault, securitizeVault])
+
+    const matrix = getCollateralMatrix(market)
+
+    expect(matrix).not.toBeNull()
+    expect(matrix!.rows).toContainEqual({
+      address: '0xsecuritize',
+      symbol: 'NOTE',
+      assetAddress: '0xSecuritize',
+      category: 'external',
+    })
+  })
 })
 
 describe('getActiveExternalCollateral', () => {
@@ -149,6 +179,17 @@ describe('getActiveExternalCollateral', () => {
 })
 
 describe('attribute stats matrix', () => {
+  it('includes Securitize member vaults in attribute columns', () => {
+    const eVault = makeVault('0xBorrow', [])
+    const securitizeVault = makeSecuritizeVault('0xSecuritize')
+    const market = makeMarket([eVault, securitizeVault])
+
+    expect(getAttributeMatrixColumns(market).map(column => column.address)).toEqual([
+      '0xborrow',
+      '0xsecuritize',
+    ])
+  })
+
   it('emits numeric values and directional rows for heatmap rendering', () => {
     const vault = {
       ...makeVault('0xStats', []),

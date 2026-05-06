@@ -1,19 +1,14 @@
-import { maxUint256 } from 'viem'
+import { isEVault, isSecuritizeCollateralVault, type SecuritizeCollateralVault, type EVaultCollateral, type EVault } from '@eulerxyz/euler-v2-sdk'
 import type { MarketGroup, MiniDiagramData, MiniNode, MiniEdge } from '~/entities/lend-discovery'
-import type { EVault, SecuritizeCollateralVault, EVaultCollateral } from '~/entities/vault'
-import type { AnyVault } from '~/composables/useVaultRegistry'
 import type { EulerLabelEntity } from '~/entities/euler/labels'
-import { isLiveCollateralEdge } from '~/entities/vault'
+import { isLiveCollateralEdge } from '~/utils/vault/ltv'
+import { maxUint256 } from 'viem'
+import type { AnyVault } from '~/composables/useVaultRegistry'
+
 import { getEulerLabelEntityLogo } from '~/entities/euler/labels'
 import { getEntitiesByVault, isVaultDeprecated } from '~/utils/eulerLabelsUtils'
 import { formatNumber, compactNumber } from '~/utils/string-utils'
-import {
-  formatHookedOpsSummary,
-  getHookedOperationMetas,
-  getVaultHookedOperations,
-  hasAnyHookedOperation,
-  isVaultEffectivelyPaused,
-} from '~/utils/vault-hooks'
+import { formatHookedOpsSummary, getHookedOperationMetas, getVaultHookedOperations, hasAnyHookedOperation, isVaultEffectivelyPaused } from '~/utils/vault-hooks'
 import { INTEREST_RATE_MODEL_TYPE } from '~/entities/constants'
 import { getVaultBorrowApy, getVaultSupplyApy } from '~/utils/vault-display'
 
@@ -96,18 +91,14 @@ export const MATRIX_VIEW_OPTIONS: MatrixViewOption[] = [
 export const isAttributeMatrixView = (id: MatrixViewId): id is AttributeMatrixMode =>
   id === 'stats' || id === 'config'
 
-// ============================================================
-// Vault Type Guards & Accessors
-// ============================================================
-
-export const isVaultType = (vault: AnyVault): vault is EVault =>
-  !('type' in vault) || (vault as { type?: string }).type === undefined
+const isSecuritizeVault = (v: AnyVault): v is SecuritizeCollateralVault =>
+  isSecuritizeCollateralVault(v)
 
 export const getVaultAddress = (vault: AnyVault): string =>
-  isVaultType(vault) ? vault.address : ('address' in vault ? (vault as { address: string }).address : '')
+  isEVault(vault) ? vault.address : ('address' in vault ? (vault as { address: string }).address : '')
 
 export const getVaultAssetSymbol = (vault: AnyVault): string => {
-  if (isVaultType(vault)) return vault.asset.symbol
+  if (isEVault(vault)) return vault.asset.symbol
   if ('asset' in vault && vault.asset && typeof vault.asset === 'object') {
     const asset = vault.asset as unknown as Record<string, unknown>
     if ('symbol' in asset && typeof asset.symbol === 'string') return asset.symbol
@@ -116,7 +107,7 @@ export const getVaultAssetSymbol = (vault: AnyVault): string => {
 }
 
 export const getVaultAssetAddress = (vault: AnyVault): string => {
-  if (isVaultType(vault)) return vault.asset.address
+  if (isEVault(vault)) return vault.asset.address
   if ('asset' in vault && vault.asset && typeof vault.asset === 'object') {
     const asset = vault.asset as unknown as Record<string, unknown>
     if ('address' in asset && typeof asset.address === 'string') return asset.address
@@ -138,7 +129,7 @@ export const getMarketEntities = (market: MarketGroup): { name: string, logos: s
   const seen = new Set<string>()
   const all: EulerLabelEntity[] = []
   for (const v of market.vaults) {
-    if (!isVaultType(v)) continue
+    if (!isEVault(v)) continue
     for (const entity of getEntitiesByVault(v)) {
       if (seen.has(entity.name)) continue
       seen.add(entity.name)
@@ -158,19 +149,19 @@ const hasBorrowableLTV = (vault: EVault): boolean =>
   vault.collaterals.some(ltv => ltv.borrowLTV > 0)
 
 export const getBorrowableVaults = (market: MarketGroup): EVault[] =>
-  market.vaults.filter(isVaultType).filter(hasBorrowableLTV)
+  market.vaults.filter(isEVault).filter(hasBorrowableLTV)
 
 export const getNonBorrowableMemberVaults = (market: MarketGroup): EVault[] =>
-  market.vaults.filter(isVaultType).filter(v => !hasBorrowableLTV(v))
+  market.vaults.filter(isEVault).filter(v => !hasBorrowableLTV(v))
 
 const hasLiveDiscoveryColumn = (vault: EVault): boolean =>
   vault.collaterals.some(ltv => isLiveCollateralEdge(ltv))
 
 const getDiscoveryColumnVaults = (market: MarketGroup): EVault[] =>
-  market.vaults.filter(isVaultType).filter(hasLiveDiscoveryColumn)
+  market.vaults.filter(isEVault).filter(hasLiveDiscoveryColumn)
 
 const getDiscoveryRowOnlyVaults = (market: MarketGroup): EVault[] =>
-  market.vaults.filter(isVaultType).filter(v => !hasLiveDiscoveryColumn(v))
+  market.vaults.filter(isEVault).filter(v => !hasLiveDiscoveryColumn(v))
 
 export const isExternalCollateral = (market: MarketGroup, address: string): boolean => {
   const normalized = address.toLowerCase()
@@ -216,7 +207,7 @@ export const getMiniDiagram = (market: MarketGroup): MiniDiagramData => {
   const connectedAddresses = new Set<string>()
 
   for (const vault of market.vaults) {
-    if (!isVaultType(vault)) continue
+    if (!isEVault(vault)) continue
     for (const ltv of vault.collaterals) {
       const colAddr = ltv.address.toLowerCase()
       if (!vaultByAddr.has(colAddr)) continue
@@ -396,7 +387,7 @@ export const getCollateralMatrix = (market: MarketGroup): CollateralMatrixData |
   for (const v of sortedNonBorrowable) addRow(v.address.toLowerCase(), v.asset.symbol, v.asset.address, 'escrow')
 
   const securitizeMembers = market.vaults
-    .filter((v): v is SecuritizeCollateralVault => 'type' in v && (v as { type?: string }).type === 'securitize')
+    .filter(isSecuritizeVault)
     .filter(v => referencedCollateral.has(v.address.toLowerCase()))
     .sort((a, b) => rowAvgLTV(b.address.toLowerCase()) - rowAvgLTV(a.address.toLowerCase()))
   for (const v of securitizeMembers) addRow(v.address.toLowerCase(), v.asset.symbol, v.asset.address, 'external')
@@ -518,7 +509,7 @@ export const getGraphConnectedAddresses = (diagram: MiniDiagramData, address: st
 export const isNodeRampingDown = (market: MarketGroup, address: string): boolean => {
   const normalized = address.toLowerCase()
   const vault = market.vaults
-    .filter(isVaultType)
+    .filter(isEVault)
     .find(v => v.address.toLowerCase() === normalized)
 
   return vault?.collaterals.some(ltv => ltv.isLiquidationLTVRamping) ?? false
@@ -570,11 +561,8 @@ export const getCellBgColor = (value: number, metric: DotMetric, min: number, ma
 // Attribute Matrix (Configuration & Stats)
 // ============================================================
 
-const isSecuritizeVault = (v: AnyVault): v is SecuritizeCollateralVault =>
-  'type' in v && (v as { type?: string }).type === 'securitize'
-
 export const isMatrixCompatibleVault = (v: AnyVault): v is EVault | SecuritizeCollateralVault =>
-  isVaultType(v) || isSecuritizeVault(v)
+  isEVault(v) || isSecuritizeVault(v)
 
 export interface VaultUsdCacheEntry {
   supply: string
@@ -622,7 +610,7 @@ export interface AttributeMatrixData {
 }
 
 const isEscrow = (v: EVault | SecuritizeCollateralVault): boolean =>
-  isVaultType(v) && useVaultRegistry().getVaultCategory(v.address) === 'escrow'
+  isEVault(v) && useVaultRegistry().getVaultCategory(v.address) === 'escrow'
 
 const compareSymbolAsc = (a: EVault | SecuritizeCollateralVault, b: EVault | SecuritizeCollateralVault): number =>
   a.asset.symbol.localeCompare(b.asset.symbol, undefined, { sensitivity: 'base' })
@@ -630,14 +618,14 @@ const compareSymbolAsc = (a: EVault | SecuritizeCollateralVault, b: EVault | Sec
 // Both Configuration and Stats matrices show only the curated product — external
 // collateral belongs to other governance and adds noise either way.
 export const getAttributeMatrixColumns = (market: MarketGroup): AttributeMatrixColumn[] => {
-  const memberEvk: EVault[] = []
+  const memberEVaults: EVault[] = []
   const memberSecuritize: SecuritizeCollateralVault[] = []
   for (const v of market.vaults) {
-    if (isVaultType(v)) memberEvk.push(v)
+    if (isEVault(v)) memberEVaults.push(v)
     else if (isSecuritizeVault(v)) memberSecuritize.push(v)
   }
 
-  memberEvk.sort(compareSymbolAsc)
+  memberEVaults.sort(compareSymbolAsc)
   memberSecuritize.sort(compareSymbolAsc)
 
   const toCol = (vault: EVault | SecuritizeCollateralVault): AttributeMatrixColumn => ({
@@ -647,7 +635,7 @@ export const getAttributeMatrixColumns = (market: MarketGroup): AttributeMatrixC
     vault,
   })
 
-  return [...memberEvk.map(toCol), ...memberSecuritize.map(toCol)]
+  return [...memberEVaults.map(toCol), ...memberSecuritize.map(toCol)]
 }
 
 const NA_CELL: AttributeCell = { display: '—', kind: 'text' }
@@ -697,7 +685,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Supply cap',
     direction: 'neutral',
     getValue: (vault, usd) => {
-      const rawCap = isVaultType(vault) ? vault.caps.supplyCap : vault.supplyCap
+      const rawCap = isEVault(vault) ? vault.caps.supplyCap : vault.supplyCap
       const { display } = formatCapDisplay(rawCap, usd?.supplyCap)
       return { display, kind: 'text' }
     },
@@ -707,7 +695,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Borrow cap',
     direction: 'neutral',
     getValue: (vault, usd) => {
-      if (!isVaultType(vault)) return NA_CELL
+      if (!isEVault(vault)) return NA_CELL
       if (isEscrow(vault)) return NA_CELL
       const rawCap = vault.caps.borrowCap
       const { display } = formatCapDisplay(rawCap, usd?.borrowCap)
@@ -719,7 +707,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Interest rate model',
     direction: 'neutral',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const t = vault.interestRateModel.type
       const label = getIrmTypeLabel(typeof t === 'number' ? t : undefined)
       return { display: label, kind: 'text', hint: vault.interestRateModel.address }
@@ -730,7 +718,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Interest fee',
     direction: 'neutral',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const pct = vault.fees.interestFee
       return { display: `${formatNumber(pct)}%`, kind: 'text' }
     },
@@ -740,7 +728,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Max liquidation discount',
     direction: 'neutral',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const pct = vault.liquidation.maxLiquidationDiscount
       return { display: `${pct}%`, kind: 'text' }
     },
@@ -750,7 +738,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Bad debt socialization',
     direction: 'neutral',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const yes = vault.liquidation.socializeDebt
       return { display: yes ? 'Yes' : 'No', kind: 'text' }
     },
@@ -760,7 +748,7 @@ export const CONFIG_ROWS: AttributeRow[] = [
     label: 'Hooked operations',
     direction: 'neutral',
     getValue: (vault) => {
-      if (!isVaultType(vault)) return NA_CELL
+      if (!isEVault(vault)) return NA_CELL
       const hookedOperations = getVaultHookedOperations(vault)
       // 'All' when the vault is effectively paused. Specific op summary
       // otherwise. 'None' when no ops are hooked.
@@ -807,7 +795,7 @@ export const STATS_ROWS: AttributeRow[] = [
     label: 'Total borrows',
     direction: 'lower-better',
     getValue: (vault, usd) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       return {
         display: usd ? usd.borrow : '…',
         numeric: usd?.borrowUsd,
@@ -820,7 +808,7 @@ export const STATS_ROWS: AttributeRow[] = [
     label: 'Available liquidity',
     direction: 'higher-better',
     getValue: (vault, usd) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       return {
         display: usd ? usd.liquidity : '…',
         numeric: usd?.liquidityUsd,
@@ -833,7 +821,7 @@ export const STATS_ROWS: AttributeRow[] = [
     label: 'Utilization',
     direction: 'lower-better',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const pct = vault.utilization
       return { display: `${formatNumber(pct, 2)}%`, numeric: pct, kind: 'text' }
     },
@@ -843,7 +831,7 @@ export const STATS_ROWS: AttributeRow[] = [
     label: 'Supply cap usage',
     direction: 'lower-better',
     getValue: (vault) => {
-      if (!isVaultType(vault)) return NA_CELL
+      if (!isEVault(vault)) return NA_CELL
       const uncapped = vault.caps.supplyCap >= maxUint256
       const pct = vault.caps.supplyCapUtilization
       const exceeded = vault.caps.supplyCap === 0n && vault.totalAssets > 0n
@@ -861,7 +849,7 @@ export const STATS_ROWS: AttributeRow[] = [
     label: 'Borrow cap usage',
     direction: 'lower-better',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const uncapped = vault.caps.borrowCap >= maxUint256
       const pct = vault.caps.borrowCapUtilization
       const exceeded = vault.caps.borrowCap === 0n && vault.totalBorrowed > 0n
@@ -881,7 +869,7 @@ export const STATS_ROWS: AttributeRow[] = [
     getValue: (vault) => {
       // Securitize vaults have no usable interest-rate display,
       // so we'd render "0.00%" — avoid that misleading display.
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const pct = supplyApyPercent(vault)
       return { display: `${formatNumber(pct, 2)}%`, numeric: pct, kind: 'text' }
     },
@@ -891,7 +879,7 @@ export const STATS_ROWS: AttributeRow[] = [
     label: 'Borrow APY',
     direction: 'lower-better',
     getValue: (vault) => {
-      if (!isVaultType(vault) || isEscrow(vault)) return NA_CELL
+      if (!isEVault(vault) || isEscrow(vault)) return NA_CELL
       const pct = borrowApyPercent(vault)
       return { display: `${formatNumber(pct, 2)}%`, numeric: pct, kind: 'text' }
     },

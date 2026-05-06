@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { zeroAddress } from 'viem'
-import type { EVault, EulerEarn } from '~/entities/vault'
-import { isCyclicalNoteVault } from '~/entities/vault'
+import type { EulerEarn, EVault } from '@eulerxyz/euler-v2-sdk'
+import { isCyclicalNoteVault } from '~/utils/vault/classification'
 import { isVaultKeyring, getEntitiesByVault, getEntitiesByEarnVault } from '~/utils/eulerLabelsUtils'
 import { useEulerProductOfVault } from '~/composables/useEulerLabels'
+import { zeroAddress } from 'viem'
 
 const { vaultAddress } = defineProps<{
   vaultAddress: string
