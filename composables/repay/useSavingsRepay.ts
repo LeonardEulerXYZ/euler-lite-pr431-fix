@@ -1,6 +1,6 @@
 import type { EVault, SecuritizeCollateralVault, PortfolioBorrowPosition, VaultEntity } from '@eulerxyz/euler-v2-sdk'
 import { isEVault } from '@eulerxyz/euler-v2-sdk'
-import { getAssetUsdValue } from '~/services/pricing/priceProvider'
+import { getAssetUsdValue } from '~/utils/sdk-prices'
 import { getBorrowPositionEffectiveLiquidationLTV } from '~/utils/ltv'
 import type { TxPlan } from '~/entities/txPlan'
 import { SwapperMode } from '~/entities/swap'

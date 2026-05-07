@@ -8,11 +8,10 @@ import { useModal } from '~/components/ui/composables/useModal'
 import { useToast } from '~/components/ui/composables/useToast'
 import { useAccount } from '@wagmi/vue'
 import type { TxPlan } from '~/entities/txPlan'
-import { getCollateralOraclePrice, getAssetOraclePrice, conservativePriceRatio, getCollateralUsdPrice, getAssetUsdValueOrZero } from '~/services/pricing/priceProvider'
+import { getCollateralOraclePrice, getAssetOraclePrice, conservativePriceRatio, getCollateralUsdPrice, getAssetUsdValueOrZero, getTokenUsdPrice } from '~/utils/sdk-prices'
 import { getAddress, formatUnits, zeroAddress, type Address } from 'viem'
 import { SwapperMode, type SwapApiQuote } from '~/entities/swap'
 import { SwapTokenSelector, OperationReviewModal } from '#components'
-import { fetchBackendPrice } from '~/services/pricing/backendClient'
 import type { Ref, ComputedRef } from 'vue'
 import { isNativeCurrencyAddress, isNativeOfWrapped, resolveWrappedNativeAddress, resolveWrappedNativeAsset } from '~/utils/native-currency'
 import { logWarn } from '~/utils/errorHandling'
@@ -849,8 +848,7 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
       const priceAddr = isNativeCurrencyAddress(borrowSelectedAsset.value.address)
         ? resolveWrappedNativeAddress(chainId.value!) || borrowSelectedAsset.value.address
         : borrowSelectedAsset.value.address
-      const priceData = await fetchBackendPrice(priceAddr as Address)
-      borrowSwapAssetUsdPrice.value = priceData?.price
+      borrowSwapAssetUsdPrice.value = await getTokenUsdPrice(priceAddr as Address)
     }
     else {
       borrowSwapAssetUsdPrice.value = undefined

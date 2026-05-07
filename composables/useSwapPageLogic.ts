@@ -1,6 +1,6 @@
 import type { SecuritizeCollateralVault, EVault } from '@eulerxyz/euler-v2-sdk'
 import type { SwapApiQuote } from '~/entities/swap'
-import { getAssetUsdValue } from '~/services/pricing/priceProvider'
+import { getAssetUsdValue } from '~/utils/sdk-prices'
 import { useEulerProductOfVault } from '~/composables/useEulerLabels'
 import { isAnyVaultBlockedByCountry, getVaultTags } from '~/composables/useGeoBlock'
 import { useSwapQuotesParallel } from '~/composables/useSwapQuotesParallel'

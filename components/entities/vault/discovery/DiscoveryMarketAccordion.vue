@@ -2,7 +2,7 @@
 import { isEVault, type SecuritizeCollateralVault, type EVault } from '@eulerxyz/euler-v2-sdk'
 import type { AnyBorrowVaultPair } from '~/types/borrow-pair'
 import { formatCompactUsdValue } from '~/utils/string-utils'
-import { formatAssetValue } from '~/services/pricing/priceProvider'
+import { formatAssetValue } from '~/utils/sdk-prices'
 import { getVaultAddress, getMiniDiagram, getCollateralMatrix, findVault, getAttributeMatrix, isMatrixCompatibleVault, formatCapDisplay, isAttributeMatrixView, MATRIX_VIEW_OPTIONS, type CollateralMatrixData, type DotMetric, type ExpandedViewMode, type AttributeMatrixData, type MatrixViewId, type VaultUsdCacheEntry } from '~/utils/discoveryCalculations'
 import type { MarketGroup } from '~/entities/lend-discovery'
 import { maxUint256 } from 'viem'

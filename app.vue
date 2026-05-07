@@ -24,9 +24,6 @@ const { isConnected, address } = useWagmi()
 // subgraph + accountLens round-trip.
 useEulerAccount()
 
-// Initialize price backend (configures endpoint when chainId changes)
-usePriceBackend()
-
 const { theme } = useTheme()
 
 watch(theme, (newTheme) => {
