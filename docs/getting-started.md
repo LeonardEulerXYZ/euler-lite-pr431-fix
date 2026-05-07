@@ -96,7 +96,6 @@ NUXT_PUBLIC_APP_URL=https://your-domain.com
 # API URLs
 EULER_API_URL=https://indexer.euler.finance
 SWAP_API_URL=https://swap.euler.finance
-PRICE_API_URL=https://indexer.euler.finance
 
 # Chain RPC endpoints (one per chain you want to enable)
 RPC_URL_1=https://your-ethereum-rpc.com

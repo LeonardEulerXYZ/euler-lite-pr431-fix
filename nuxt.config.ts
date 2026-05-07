@@ -160,7 +160,6 @@ export default defineNuxtConfig({
       pythHermesUrl: '',
       eulerApiUrl: '',
       swapApiUrl: '',
-      priceApiUrl: '',
       sentryDsn: '', // set via NUXT_PUBLIC_SENTRY_DSN
     },
   },
@@ -227,7 +226,10 @@ export default defineNuxtConfig({
 
   vite: {
     build: { target: 'esnext' },
-    optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+    optimizeDeps: {
+      include: ['@eulerxyz/euler-v2-sdk'],
+      esbuildOptions: { target: 'esnext' },
+    },
   },
 
   telemetry: false,

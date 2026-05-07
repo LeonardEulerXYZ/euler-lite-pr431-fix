@@ -49,7 +49,6 @@ cp .env.example .env
 | ----------------- | ----------------------------- | ------------------------------------- |
 | `EULER_API_URL`   | —                             | Euler indexer API (token data, logos) |
 | `SWAP_API_URL`    | —                             | Euler swap API                        |
-| `PRICE_API_URL`   | —                             | Euler price API                       |
 | `PYTH_HERMES_URL` | `https://hermes.pyth.network` | Pyth oracle endpoint (server-only, proxied via `/api/pyth/updates`) |
 
 > **Doppler compatibility:** If your secret manager injects `NUXT_PUBLIC_*` prefixed names (e.g. `NUXT_PUBLIC_EULER_API_URL`), the app accepts both forms automatically.
@@ -262,7 +261,6 @@ To run without Doppler, override the `CMD` and pass env vars directly:
 docker run -p 3000:3000 \
   -e EULER_API_URL=https://indexer.euler.finance \
   -e SWAP_API_URL=https://swap.euler.finance \
-  -e PRICE_API_URL=https://indexer.euler.finance \
   -e APPKIT_PROJECT_ID=your-project-id \
   -e RPC_URL_1=https://your-rpc.com \
   -e NUXT_PUBLIC_SUBGRAPH_URI_1=https://your-subgraph.com \
@@ -322,7 +320,7 @@ Before deploying:
 
 - [ ] Copied `.env.example` to `.env` and filled in values
 - [ ] Set `APPKIT_PROJECT_ID` and `NUXT_PUBLIC_APP_URL`
-- [ ] Set `EULER_API_URL`, `SWAP_API_URL`, `PRICE_API_URL`
+- [ ] Set `EULER_API_URL`, `SWAP_API_URL`
 - [ ] Added at least one `RPC_URL_<chainId>` with matching `NUXT_PUBLIC_SUBGRAPH_URI_<chainId>`
 - [ ] Configured branding via `NUXT_PUBLIC_CONFIG_*` env vars (title, description, logo, social links, social share image)
 - [ ] Customized theme colors in `assets/styles/variables.scss` (THEME CONFIGURATION section)
