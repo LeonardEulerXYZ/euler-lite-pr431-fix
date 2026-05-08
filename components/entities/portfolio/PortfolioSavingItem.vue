@@ -14,6 +14,7 @@ import { useModal } from '~/components/ui/composables/useModal'
 
 const { position } = defineProps<{ position: PortfolioSavingsPosition<VaultEntity> }>()
 const modal = useModal()
+const positionKey = computed(() => `${position.subAccount.toLowerCase()}:${position.vault.address.toLowerCase()}`)
 
 const { address } = useAccount()
 const { portfolioAddress } = useEulerAccount()
@@ -125,6 +126,11 @@ const onClick = () => {
   <div
     v-if="isSecuritize"
     class="block no-underline bg-surface rounded-xl border border-line-subtle shadow-card cursor-pointer transition-all duration-default ease-default hover:shadow-card-hover hover:border-line-emphasis"
+    data-id="portfolio-list-item"
+    data-list="lend"
+    :data-key="positionKey"
+    :data-vault-address="vault.address.toLowerCase()"
+    :data-sub-account="position.subAccount.toLowerCase()"
     @click="onClick"
   >
     <div class="flex py-16 px-16 pb-12 border-b border-line-default">
@@ -134,7 +140,13 @@ const onClick = () => {
           size="40"
         />
         <div class="flex-grow ml-12">
-          <div class="text-content-tertiary text-p3 mb-4 flex items-center gap-4">
+          <div
+            class="text-content-tertiary text-p3 mb-4 flex items-center gap-4"
+            data-id="data-point"
+            :data-key="positionKey"
+            data-field="name"
+            :data-value="displayName"
+          >
             <VaultDisplayName
               :name="displayName"
               :is-unverified="isUnverified"
@@ -162,7 +174,13 @@ const onClick = () => {
               Deprecated
             </span>
           </div>
-          <div class="text-h5 text-content-primary">
+          <div
+            class="text-h5 text-content-primary"
+            data-id="data-point"
+            :data-key="positionKey"
+            data-field="asset-symbol"
+            :data-value="vault.asset.symbol"
+          >
             {{ vault.asset.symbol }}
           </div>
         </div>
@@ -175,7 +193,13 @@ const onClick = () => {
               @click.stop="onSupplyInfoIconClick"
             />
           </div>
-          <div class="text-p2 flex text-accent-600">
+          <div
+            class="text-p2 flex text-accent-600"
+            data-id="data-point"
+            :data-key="positionKey"
+            data-field="supply-apy"
+            :data-value="supplyApyWithRewards"
+          >
             <SvgIcon
               v-if="rewardsExist"
               name="sparks"
@@ -195,7 +219,13 @@ const onClick = () => {
             Supply value
           </div>
           <div class="flex justify-between gap-8 text-right">
-            <div class="text-content-primary text-p3">
+            <div
+              class="text-content-primary text-p3"
+              data-id="data-point"
+              :data-key="positionKey"
+              data-field="supply-value"
+              :data-value="position.assets.toString()"
+            >
               <UiExactAmount :exact="formatExactAmount(position.assets, vault.asset.decimals, vault.asset.symbol)">
                 {{ formatSmartAmount(assetAmount) }} {{ vault.asset.symbol }}
               </UiExactAmount>
@@ -237,6 +267,11 @@ const onClick = () => {
   <div
     v-else
     class="block no-underline bg-surface rounded-xl border border-line-subtle shadow-card cursor-pointer transition-all duration-default ease-default hover:shadow-card-hover hover:border-line-emphasis"
+    data-id="portfolio-list-item"
+    data-list="lend"
+    :data-key="positionKey"
+    :data-vault-address="vault.address.toLowerCase()"
+    :data-sub-account="position.subAccount.toLowerCase()"
     @click="onClick"
   >
     <div class="flex py-16 px-16 pb-12 border-b border-line-default">
@@ -246,7 +281,13 @@ const onClick = () => {
           size="40"
         />
         <div class="flex-grow ml-12">
-          <div class="text-content-tertiary text-p3 mb-4 flex items-center gap-4">
+          <div
+            class="text-content-tertiary text-p3 mb-4 flex items-center gap-4"
+            data-id="data-point"
+            :data-key="positionKey"
+            data-field="name"
+            :data-value="displayName"
+          >
             <VaultDisplayName
               :name="displayName"
               :is-unverified="isUnverified"
@@ -274,7 +315,13 @@ const onClick = () => {
               Deprecated
             </span>
           </div>
-          <div class="text-h5 text-content-primary">
+          <div
+            class="text-h5 text-content-primary"
+            data-id="data-point"
+            :data-key="positionKey"
+            data-field="asset-symbol"
+            :data-value="vault.asset.symbol"
+          >
             {{ vault.asset.symbol }}
           </div>
         </div>
@@ -287,7 +334,13 @@ const onClick = () => {
               @click.stop="onSupplyInfoIconClick"
             />
           </div>
-          <div class="text-p2 flex text-accent-600">
+          <div
+            class="text-p2 flex text-accent-600"
+            data-id="data-point"
+            :data-key="positionKey"
+            data-field="supply-apy"
+            :data-value="supplyApyWithRewards"
+          >
             <SvgIcon
               v-if="rewardsExist"
               name="sparks"
@@ -308,7 +361,13 @@ const onClick = () => {
             Supply value
           </div>
           <div class="flex justify-between gap-8 text-right">
-            <div class="text-content-primary text-p3">
+            <div
+              class="text-content-primary text-p3"
+              data-id="data-point"
+              :data-key="positionKey"
+              data-field="supply-value"
+              :data-value="supplyValueDisplay"
+            >
               {{ supplyValueDisplay }}
             </div>
             <UiExactAmount
@@ -329,7 +388,13 @@ const onClick = () => {
             Projected earnings per month
           </div>
           <div class="flex justify-between gap-8 text-right">
-            <div class="text-content-primary text-p3">
+            <div
+              class="text-content-primary text-p3"
+              data-id="data-point"
+              :data-key="positionKey"
+              data-field="projected-earnings-month"
+              :data-value="projectedEarningsPerMonth"
+            >
               ${{ projectedEarningsPerMonth }}
             </div>
           </div>
