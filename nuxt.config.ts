@@ -163,6 +163,13 @@ export default defineNuxtConfig({
       sentryDsn: '', // set via NUXT_PUBLIC_SENTRY_DSN
     },
   },
+  ignore: [
+    '**/.parity/**',
+    '**/artifacts/**',
+    '**/.playwright-mcp/**',
+    '**/.nuxt/**',
+    '**/.output/**',
+  ],
 
   sourcemap: {
     server: false,
@@ -226,6 +233,17 @@ export default defineNuxtConfig({
 
   vite: {
     build: { target: 'esnext' },
+    server: {
+      watch: {
+        ignored: [
+          '**/.parity/**',
+          '**/artifacts/**',
+          '**/.playwright-mcp/**',
+          '**/.nuxt/**',
+          '**/.output/**',
+        ],
+      },
+    },
     optimizeDeps: {
       include: ['@eulerxyz/euler-v2-sdk'],
       esbuildOptions: { target: 'esnext' },

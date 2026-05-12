@@ -190,6 +190,7 @@ const onClick = () => {
             <SvgIcon
               class="!w-16 !h-16 text-content-muted hover:text-content-secondary transition-colors cursor-pointer"
               name="info-circle"
+              data-modal-trigger="supply-apy"
               @click.stop="onSupplyInfoIconClick"
             />
           </div>
@@ -204,6 +205,7 @@ const onClick = () => {
               v-if="rewardsExist"
               name="sparks"
               class="!w-20 !h-20 text-accent-600 mr-4 cursor-pointer"
+              data-modal-trigger="supply-apy"
               @click.stop="onSupplyInfoIconClick"
             />
             {{ formatNumber(supplyApyWithRewards) }}%
@@ -331,6 +333,7 @@ const onClick = () => {
             <SvgIcon
               class="!w-16 !h-16 text-content-muted hover:text-content-secondary transition-colors cursor-pointer"
               name="info-circle"
+              data-modal-trigger="supply-apy"
               @click.stop="onSupplyInfoIconClick"
             />
           </div>
@@ -345,6 +348,7 @@ const onClick = () => {
               v-if="rewardsExist"
               name="sparks"
               class="!w-20 !h-20 text-accent-600 mr-4 cursor-pointer"
+              data-modal-trigger="supply-apy"
               @click.stop="onSupplyInfoIconClick"
             />
             {{ formatNumber(supplyApyWithRewards) }}%

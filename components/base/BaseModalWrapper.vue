@@ -147,6 +147,7 @@ const dragStyle = computed(() => ({
           icon="close"
           name="cross"
           icon-only
+          data-modal-close
           @click="$emit('close')"
         />
       </div>
