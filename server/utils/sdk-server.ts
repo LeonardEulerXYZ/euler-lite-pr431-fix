@@ -45,7 +45,7 @@ import { parseChainIds } from '~/utils/parseChainIds'
 import { resolveRpcUrl } from './rpc'
 import { resolveLabelsBaseUrl } from './labels-base-url'
 import { TURTLE_EARN_API_URL } from './turtle-proxy'
-import { createSonicProviderService } from './sonic-provider-service'
+import { createServerProviderService } from './server-provider-service'
 
 const sdkByChain = new Map<number, Promise<EulerSDK>>()
 
@@ -122,7 +122,7 @@ export const getServerSdk = (chainId: number): Promise<EulerSDK> => {
   const existing = sdkByChain.get(chainId)
   if (existing) return existing
   const config = buildServerSdkConfig(chainId)
-  const providerService = createSonicProviderService(config.rpcUrls, new ProviderService(config.rpcUrls))
+  const providerService = createServerProviderService(config.rpcUrls, new ProviderService(config.rpcUrls))
   const promise = buildEulerSDK({
     config,
     servicesOverrides: { providerService },
