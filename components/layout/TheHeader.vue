@@ -23,6 +23,7 @@ const route = useRoute()
 const {
   docsUrl,
   toolboxUrl,
+  riskAnalyticsUrl,
   stargateUrl,
   tosUrl,
   privacyPolicyUrl,
@@ -51,6 +52,7 @@ const links = computed(
     [
       docsUrl ? { title: 'Docs', url: docsUrl } : null,
       toolboxUrl ? { title: 'Toolbox', url: toolboxUrl } : null,
+      riskAnalyticsUrl ? { title: 'Risk & Analytics', url: riskAnalyticsUrl } : null,
       stargateUrl ? { title: 'Stargate', url: stargateUrl } : null,
       tosUrl ? { title: 'Terms of Use', url: tosUrl } : null,
       privacyPolicyUrl ? { title: 'Privacy Policy', url: privacyPolicyUrl } : null,
