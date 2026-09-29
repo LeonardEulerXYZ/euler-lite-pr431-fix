@@ -128,6 +128,7 @@ export default defineNuxtConfig({
     public: {
       // CONFIG_ vars (Doppler: NUXT_PUBLIC_CONFIG_*)
       configDocsUrl: '',
+      configToolboxUrl: '',
       configStargateUrl: '',
       configTosUrl: '',
       configTosMdUrl: '',
