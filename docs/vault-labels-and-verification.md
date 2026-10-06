@@ -375,14 +375,16 @@ For per-address lookups during direct navigation to a not-yet-cached vault, `fet
 
 The cyclical Interest Rate Model block is **label-gated**, not IRM-type-gated.
 
-`isVaultCyclicalNote(address)` in `utils/eulerLabelsUtils.ts` is true when the product `tags` or that vault's `vaultOverrides.tags` include `cyclical note`. That helper is what `VaultOverview.vue` uses to swap `VaultOverviewBlockCyclicalIRM` in for the generic IRM block. The same tag drives:
+`isVaultCyclicalNote(address)` in `utils/eulerLabelsUtils.ts` is true when the product `tags` or that vault's `vaultOverrides.tags` include `cyclical note`. That helper is what `VaultOverview.vue` uses to swap `VaultOverviewBlockCyclicalIRM` in for the generic IRM block. The same tag participates in these UI gates:
 
 | Surface | Gate |
 |---|---|
 | Overview IRM block | `isVaultCyclicalNote(vault.address)` |
 | `cyclicalNote` type badge | verified **and** the tag |
-| Borrow / lend / discovery "cyclical note" chip | the tag |
-| Target-utilisation info warning (`useVaultWarnings`) | the tag; skipped in `repay` context |
+| Lend list "cyclical note" badge | the tag and verified vault governance |
+| Borrow list "cyclical note" badge | the borrow vault's tag and verified governance for both vaults in the pair |
+| Discovery graph "cyclical note" badge | the tag, subject to the graph's badge priority |
+| Target-utilisation info warning (`useVaultWarnings`) | the tag, at least 95% utilisation, and a context other than `repay`; repay keeps its standard high/critical warning |
 
 `isCyclicalNoteVault` in `utils/vault/classification.ts` is a different helper: it only inspects `vault.interestRateModel.type` (`FIXED_CYCLICAL_BINARY` = 4 or `FIXED_CYCLICAL_BINARY_MONTHLY` = 5). A vault can have a cyclical IRM on-chain and still render the generic IRM block if the label tag is absent. Do not treat the type number as permission to show cyclical-note UI.
 
@@ -401,7 +403,7 @@ The live "Now" marker and elapsed-cycle math use:
 const now = useNow({ scheduler: cb => useIntervalFn(cb, 1_000) })
 ```
 
-VueUse 15's default `useNow()` scheduler no longer ticks every second and no longer typechecks as a bare call. Borrow APYs on the block convert the IRM's 27-decimal per-second rate (`SPY`) with `(1 + spy)^(secondsInYear) - 1`.
+The custom scheduler updates the clock once per second; VueUse 15's bare `useNow()` is valid and defaults to animation-frame updates. Borrow APYs on the block convert the IRM's 27-decimal per-second rate (`SPY`) with `(1 + spy)^(secondsInYear) - 1`.
 
 ## Discovery Page Filtering
 
