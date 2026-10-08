@@ -114,25 +114,6 @@ const {
 })
 
 // --- Tab composables ---
-const wallet = useWalletRepay({
-  position,
-  borrowVault,
-  collateralVault,
-  formTab,
-  walletBalance,
-  plan,
-  isSubmitting,
-  isPreparing,
-  clearSimulationError,
-  runSimulation,
-  netAPY,
-  collateralSupplyApy,
-  borrowApy,
-  collateralSupplyRewardApy,
-  borrowRewardApy,
-  oraclePriceRatio,
-})
-
 const walletSwap = useWalletSwapRepay({
   position,
   borrowVault,
@@ -142,6 +123,25 @@ const walletSwap = useWalletSwapRepay({
   isSubmitting,
   isPreparing,
   slippage,
+  clearSimulationError,
+  runSimulation,
+  netAPY,
+  collateralSupplyApy,
+  borrowApy,
+  collateralSupplyRewardApy,
+  borrowRewardApy,
+  oraclePriceRatio,
+})
+const wallet = useWalletRepay({
+  position,
+  borrowVault,
+  collateralVault,
+  spendingAsset: walletSwap.selectedAsset,
+  formTab,
+  walletBalance,
+  plan,
+  isSubmitting,
+  isPreparing,
   clearSimulationError,
   runSimulation,
   netAPY,
@@ -271,7 +271,9 @@ const addToBatchWithoutWarnings = async () => {
       return
     }
     const liabilityVault = borrowVault.value.address as Address
-    const amountNano = valueToNano(wallet.amount.value, borrowVault.value.asset.decimals)
+    const directAsset = wallet.verifiedAsset.value
+    if (!directAsset) return
+    const amountNano = valueToNano(wallet.amount.value, directAsset.decimals)
     const currentDebt = position.value.borrowed || 0n
     const isFullRepay = amountNano >= currentDebt || wallet.walletRepayPercent.value >= 100
     const receiver = position.value.subAccount as Address
@@ -286,7 +288,7 @@ const addToBatchWithoutWarnings = async () => {
       }),
       subAccount: position.value.subAccount as Address,
       affectedSubAccounts: getFullRepayAffectedSubAccounts(isFullRepay),
-      review: { type: 'repay', asset: borrowVault.value.asset, amount: wallet.amount.value },
+      review: { type: 'repay', asset: directAsset, amount: wallet.amount.value },
     })
     wallet.amount.value = ''
     redirectAfterRepayAdd(isFullRepay)
@@ -686,7 +688,7 @@ watch(formTab, () => {
                   v-model="wallet.amount.value"
                   label="Pay from wallet"
                   :desc="name"
-                  :asset="borrowVault.asset"
+                  :asset="wallet.verifiedAsset.value ?? borrowVault.asset"
                   :vault="borrowVault"
                   :balance="walletBalance"
                   :max-handler="wallet.onSourceMax"
@@ -698,7 +700,7 @@ watch(formTab, () => {
                   v-if="borrowVault?.asset"
                   v-model="wallet.amount.value"
                   label="Debt to repay"
-                  :asset="borrowVault.asset"
+                  :asset="wallet.verifiedAsset.value ?? borrowVault.asset"
                   :vault="borrowVault"
                   :balance="position.borrowed"
                   :readonly="walletSwap.spending.isBlocked.value"

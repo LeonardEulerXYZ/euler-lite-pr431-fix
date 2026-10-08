@@ -297,8 +297,8 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
 
   // --- Computed: math ---
   const collateralAmountFixed = computed(() => FixedPoint.fromValue(
-    valueToNano(collateralAmount.value || '0', collateralVault.value?.asset.decimals),
-    Number(collateralVault.value?.asset.decimals),
+    valueToNano(collateralAmount.value || '0', borrowActiveAssetDecimals.value),
+    Number(borrowActiveAssetDecimals.value),
   ))
   const borrowAmountFixed = computed(() => FixedPoint.fromValue(
     valueToNano(borrowAmount.value || '0', borrowVault.value?.asset.decimals),
@@ -345,7 +345,7 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   })
 
   const borrowActiveAssetDecimals = computed(() => {
-    if ((borrowNeedsSwap.value || isBorrowNativeWrap.value) && borrowSelectedAsset.value) return borrowSelectedAsset.value.decimals
+    if (!isSavingCollateral.value && borrowSelectedAsset.value) return borrowSelectedAsset.value.decimals
     return collateralVault.value?.asset?.decimals
   })
 
@@ -423,11 +423,14 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
     const { tags, disabled } = getVaultTags(vaultAddr)
     const decimals = collateralVault.value?.asset.decimals
     const assetAddress = collateralVault.value?.asset.address
+    const walletDecimals = borrowSelectedAsset.value?.address.toLowerCase() === assetAddress?.toLowerCase()
+      ? borrowSelectedAsset.value.decimals
+      : decimals
 
     const opts: CollateralOption[] = [
       {
         type: 'wallet',
-        amount: nanoToValue(balance.value, decimals),
+        amount: nanoToValue(balance.value, walletDecimals),
         price: walletCollateralPriceUsd.value,
         apy: collateralSupplyApyWithRewards.value,
         assetAddress,
@@ -508,7 +511,7 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   })
 
   const isSubmitDisabled = computed(() => {
-    if (spending.isBlocked.value) return true
+    if (!isSavingCollateral.value && spending.isBlocked.value) return true
     if (!isConnected.value && !isSpyMode.value) return false
     if (findBlockingDisabledOp(borrowPlannedOps.value)) return true
     if (isSavingCollateral.value && !savingCollateral.value) return true
@@ -706,9 +709,12 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
       if (asyncEstimatesGuard.isStale(gen)) return
 
       // When swapping, use the quote output amount (collateral-vault-asset denominated)
+      const directDecimals = isSavingCollateral.value
+        ? collateral.asset.decimals
+        : borrowSelectedAsset.value?.decimals ?? collateral.asset.decimals
       const collateralAmountNano = borrowNeedsSwap.value
         ? borrowSwapEffectiveQuote.value ? BigInt(borrowSwapEffectiveQuote.value.amountOut || 0) : 0n
-        : valueToNano(collateralAmount.value || '0', collateral.asset.decimals)
+        : valueToNano(collateralAmount.value || '0', directDecimals)
       const collateralCashDelta = isSavingCollateral.value && !borrowNeedsSwap.value ? 0n : collateralAmountNano
       const savingsSourceAddress = normalizeAddress(savingCollateral.value?.subAccount)
       const normalizedTargetSubAccountAddress = normalizeAddress(targetSubAccountAddress)
@@ -993,12 +999,15 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
 
     // Standard borrow (fresh-deposit or savings-sourced collateral; collateral
     // amount may be 0 for a pure borrow against an earlier batch step's collateral).
-    let collateralAmountForPlan = FixedPoint.fromValue(
-      valueToNano(snap.collateralAmount || '0', snap.collateralVault.asset.decimals),
-      Number(snap.collateralVault.asset.decimals),
-    ).toFormat({ decimals: Number(snap.collateralVault.shares.decimals) }).value
+    if (!snap.isSavingCollateral && !snap.selectedAsset) throw new Error('Token decimals are not verified')
+    const sourceDecimals = snap.isSavingCollateral ? snap.collateralVault.asset.decimals : snap.selectedAsset!.decimals
+    let collateralAmountForPlan = valueToNano(snap.collateralAmount || '0', sourceDecimals)
     if (snap.isSavingCollateral) {
       if (!snap.savingCollateral) throw new Error('Savings position not found')
+      collateralAmountForPlan = FixedPoint.fromValue(
+        collateralAmountForPlan,
+        Number(sourceDecimals),
+      ).toFormat({ decimals: Number(snap.collateralVault.shares.decimals) }).value
       collateralAmountForPlan = snap.savingCollateral.assets === collateralAmountForPlan
         ? snap.savingCollateral.shares
         : snap.collateralVault.convertToShares(collateralAmountForPlan)
@@ -1072,12 +1081,15 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
       })
     }
 
-    let collateralAmount = FixedPoint.fromValue(
-      valueToNano(snap.collateralAmount || '0', snap.collateralVault.asset.decimals),
-      Number(snap.collateralVault.asset.decimals),
-    ).toFormat({ decimals: Number(snap.collateralVault.shares.decimals) }).value
+    if (!snap.isSavingCollateral && !snap.selectedAsset) throw new Error('Token decimals are not verified')
+    const sourceDecimals = snap.isSavingCollateral ? snap.collateralVault.asset.decimals : snap.selectedAsset!.decimals
+    let collateralAmount = valueToNano(snap.collateralAmount || '0', sourceDecimals)
     if (snap.isSavingCollateral) {
       if (!snap.savingCollateral) throw new Error('Savings position not found')
+      collateralAmount = FixedPoint.fromValue(
+        collateralAmount,
+        Number(sourceDecimals),
+      ).toFormat({ decimals: Number(snap.collateralVault.shares.decimals) }).value
       collateralAmount = snap.savingCollateral.assets === collateralAmount
         ? snap.savingCollateral.shares
         : snap.collateralVault.convertToShares(collateralAmount)
@@ -1110,7 +1122,7 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   }
 
   const captureBorrowFormSnapshot = (): BorrowFormSnapshot => {
-    if (spending.isBlocked.value) throw new Error('Token decimals are not verified')
+    if (!isSavingCollateral.value && spending.isBlocked.value) throw new Error('Token decimals are not verified')
     if (!collateralVault.value || !borrowVault.value) throw new Error('Borrow vaults are not loaded')
     return {
       chainId: chainId.value!,
@@ -1133,7 +1145,7 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   ): BorrowBatchSnapshot => ({ subAccount, ...formSnapshot })
 
   const submit = async () => {
-    if (spending.isBlocked.value) return
+    if (!isSavingCollateral.value && spending.isBlocked.value) return
     if (isOperationBlocked.value) return
     if (isPreparing.value || isGeoBlocked.value || isBorrowRestricted.value || isBorrowSwapRestricted.value || isBorrowPayWithBlocked.value) return
     isPreparing.value = true
@@ -1279,6 +1291,8 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   )
 
   // --- Watchers ---
+  watch([collateralVault, chainId], ([vault]) => spending.setDefaultAsset(vault?.asset), { immediate: true })
+
   watch(ltv, () => {
     updateSyncEstimates()
   })

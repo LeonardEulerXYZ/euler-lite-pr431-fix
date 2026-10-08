@@ -12,6 +12,8 @@ export const useVerifiedSpendingAsset = (invalidate?: () => void) => {
   const { client } = useRpcClient()
   const requested = shallowRef<VaultAsset>()
   const verified = shallowRef<VaultAsset>()
+  let defaultKey: string | undefined
+  let defaultAddress: string | undefined
   const error = ref<string | null>(null)
   const isLoading = ref(false)
   let generation = 0
@@ -75,6 +77,16 @@ export const useVerifiedSpendingAsset = (invalidate?: () => void) => {
       void resolve()
     },
   })
+  // The vault asset is also a wallet spending token on direct paths. Seed it
+  // without replacing an explicit pay-with selection on later vault refreshes.
+  const setDefaultAsset = (candidate?: VaultAsset) => {
+    const nextKey = candidate && chainId.value ? `${chainId.value}:${candidate.address.toLowerCase()}` : undefined
+    if (nextKey === defaultKey) return
+    const useDefault = !requested.value || requested.value.address.toLowerCase() === defaultAddress
+    defaultKey = nextKey
+    defaultAddress = candidate?.address.toLowerCase()
+    if (useDefault) asset.value = candidate
+  }
   const isBlocked = computed(() => !!requested.value && !verified.value)
-  return { asset, isBlocked, isLoading, error, retry: resolve }
+  return { asset, isBlocked, isLoading, error, retry: resolve, setDefaultAsset }
 }

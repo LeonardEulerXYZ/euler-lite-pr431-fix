@@ -448,6 +448,7 @@ describe('useBorrowForm savings collateral', () => {
 
     form.collateralAmount.value = '1'
     form.borrowAmount.value = '1'
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value).toBeDefined())
     await form.submit()
 
     expect(mocks.runSimulation).toHaveBeenCalled()
@@ -877,9 +878,11 @@ describe('useBorrowForm savings collateral', () => {
   it('verifies programmatic Pay-with selection before parsing or review and clears old units', async () => {
     queryClient.clear()
     let resolve!: (decimals: number) => void
-    const readContract = vi.fn(() => new Promise<number>((done) => {
-      resolve = done
-    }))
+    const readContract = vi.fn()
+      .mockResolvedValueOnce(0)
+      .mockImplementationOnce(() => new Promise<number>((done) => {
+        resolve = done
+      }))
     vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract }) }))
     const form = makeForm(shallowRef([]))
     form.collateralAmount.value = '5'
@@ -894,7 +897,28 @@ describe('useBorrowForm savings collateral', () => {
     resolve(8)
     await vi.waitFor(() => expect(form.borrowSelectedAsset.value?.decimals).toBe(8))
     expect(form.borrowActiveAssetDecimals.value).toBe(8)
-    expect(readContract).toHaveBeenCalledTimes(1)
+    expect(readContract).toHaveBeenCalledTimes(2)
+  })
+
+  it('passes the verified raw wallet collateral amount to direct borrow plans and intents', async () => {
+    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(6) }) }))
+    const collateral = {
+      ...vault,
+      asset: { ...vault.asset, decimals: 18 },
+      shares: { ...vault.shares, decimals: 18 },
+    } as EVault
+    const form = makeForm(shallowRef([]), shallowRef(makePair(collateral, vault)))
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value?.decimals).toBe(6))
+    form.collateralAmount.value = '1.25'
+    form.borrowAmount.value = '1'
+    const snapshot = form.captureBorrowSnapshot(SUB_ACCOUNT_A as Address)
+    const intent = form.createBorrowIntent(snapshot) as unknown as { planner: { args: { collateral: { amount: bigint } } } }
+    expect(intent.planner.args.collateral.amount).toBe(1_250_000n)
+
+    await form.buildBorrowPlan(snapshot)
+    expect(mocks.planBorrow).toHaveBeenCalledWith(expect.objectContaining({
+      collateral: expect.objectContaining({ amount: 1_250_000n }),
+    }))
   })
 
   it.each([17, 8])('uses verified %i units for typed and Max input through intent and review', async (decimals) => {

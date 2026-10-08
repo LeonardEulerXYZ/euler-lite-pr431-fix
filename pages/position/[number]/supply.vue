@@ -60,7 +60,7 @@ const isNativeWrap = computed(() => {
 })
 
 const activeBalance = computed(() => (needsSwap.value || isNativeWrap.value) ? selectedAssetBalance.value : balance.value)
-const activeAsset = computed(() => (needsSwap.value || isNativeWrap.value) && selectedAsset.value ? selectedAsset.value : form.asset.value)
+const activeAsset = computed(() => selectedAsset.value ?? form.asset.value)
 
 const form = useCollateralForm({
   mode: 'supply',
@@ -166,7 +166,8 @@ const form = useCollateralForm({
         subAccounts: [receiver],
       })
     }
-    const amount = valueToNano(form.amount.value || '0', asset.decimals)
+    if (!selectedAsset.value) throw new Error('Token decimals are not verified')
+    const amount = valueToNano(form.amount.value || '0', selectedAsset.value.decimals)
     const wrappedAddress = isNativeWrap.value ? resolveWrappedNativeAddress(chainId.value!) : null
     return createIntent({
       kind: 'deposit',
@@ -221,7 +222,7 @@ const form = useCollateralForm({
       }
       return selectedAsset.value
     }
-    return form.asset.value
+    return selectedAsset.value ?? form.asset.value
   },
   getSwapToAsset: () => form.asset.value,
 
@@ -300,7 +301,8 @@ const addToBatch = async () => {
     else {
       const vaultAddress = form.collateralVault.value!.address as Address
       const assetAddress = a.address as Address
-      const amount = valueToNano(form.amount.value, a.decimals)
+      if (!selectedAsset.value) return
+      const amount = valueToNano(form.amount.value, selectedAsset.value.decimals)
       await addBatchEntry({
         label: `Supply ${form.amount.value} ${a.symbol}`,
         intent: createIntent({
@@ -311,7 +313,7 @@ const addToBatch = async () => {
           subAccounts: [pos.subAccount as Address],
         }),
         subAccount: pos.subAccount as Address,
-        review: { type: 'supply', asset: a, amount: form.amount.value },
+        review: { type: 'supply', asset: selectedAsset.value, amount: form.amount.value },
       })
     }
     form.amount.value = ''
@@ -343,6 +345,8 @@ const openSwapTokenSelector = () => {
 }
 
 // Supply-specific watchers
+watch([form.asset, chainId], ([vaultAsset]) => spending.setDefaultAsset(vaultAsset), { immediate: true })
+
 watch(selectedAsset, async () => {
   if (needsSwap.value && form.amount.value) {
     form.resetSwapQuoteState()
@@ -394,7 +398,7 @@ watch(selectedAsset, async () => {
               v-model="form.amount.value"
               label="Supply amount"
               :desc="name"
-              :asset="(needsSwap || isNativeWrap) && selectedAsset ? selectedAsset : form.asset.value"
+              :asset="selectedAsset ?? form.asset.value"
               :vault="(needsSwap || isNativeWrap) ? undefined : (form.collateralVault.value as EVault)"
               :price-override="(needsSwap || isNativeWrap) ? swapAssetUsdPrice : undefined"
               :balance="activeBalance"

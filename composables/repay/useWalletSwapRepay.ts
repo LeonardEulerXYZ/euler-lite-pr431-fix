@@ -823,6 +823,10 @@ export const useWalletSwapRepay = (options: UseWalletSwapRepayOptions) => {
     borrowVault.value?.asset.address.toLowerCase() ?? '',
   ].join('|'))
 
+  watch([borrowVault, chainId], ([vault]) => {
+    spending.setDefaultAsset(vault?.asset)
+  }, { immediate: true })
+
   watch(quoteContextKey, () => {
     resetDerivedState()
     quotes.reset()

@@ -41,6 +41,22 @@ beforeEach(() => {
 })
 
 describe('selected spending asset decimals', () => {
+  it('verifies a default wallet asset and preserves an explicit pay-with choice across vault changes', async () => {
+    const state = useVerifiedSpendingAsset()
+    state.setDefaultAsset(token)
+    expect(state.isBlocked.value).toBe(true)
+    expect(state.asset.value).toBeUndefined()
+    await settle()
+    expect(state.asset.value?.decimals).toBe(17)
+
+    state.asset.value = other
+    await settle()
+    state.setDefaultAsset({ ...token, address: '0x00000000000000000000000000000000000000ef' })
+    await settle()
+    expect(state.asset.value?.address).toBe(other.address)
+    expect(readContract).toHaveBeenCalledTimes(2)
+  })
+
   it('does no reads until a spending token is selected; corrects only the local selection', async () => {
     const state = useVerifiedSpendingAsset()
     expect(readContract).not.toHaveBeenCalled()

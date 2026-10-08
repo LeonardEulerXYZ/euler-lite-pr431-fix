@@ -471,10 +471,15 @@ export const useCollateralForm = (options: UseCollateralFormOptions) => {
     const amountOut = BigInt(swapEffectiveQuote.value.amountOut || 0)
     return amountOut > 0n ? amountOut : 0n
   })
-  const amountFixed = computed(() => FixedPoint.fromValue(
-    swapCollateralDeltaNano.value ?? valueToNano(amount.value || '0', collateralVault.value?.asset.decimals),
-    Number(collateralVault.value?.asset.decimals),
-  ))
+  const amountFixed = computed(() => {
+    const decimals = options.mode === 'supply' && swapCollateralDeltaNano.value === null
+      ? options.effectiveAsset.value?.decimals ?? collateralVault.value?.asset.decimals
+      : collateralVault.value?.asset.decimals
+    return FixedPoint.fromValue(
+      swapCollateralDeltaNano.value ?? valueToNano(amount.value || '0', decimals),
+      Number(decimals),
+    )
+  })
   const borrowedFixed = computed(() => FixedPoint.fromValue(position.value?.borrowed || 0n, borrowVault.value?.shares.decimals || 18))
   const suppliedFixed = computed(() => FixedPoint.fromValue(collateralAssets.value, collateralVault.value?.asset.decimals || 18))
   const priceFixed = computed(() => {
@@ -839,7 +844,8 @@ export const useCollateralForm = (options: UseCollateralFormOptions) => {
         clearProjectedYieldEstimate()
         return
       }
-      const amountNano = quotedCollateralDelta ?? valueToNano(amount.value, evault.asset.decimals)
+      const amountNano = quotedCollateralDelta ?? valueToNano(amount.value,
+        options.mode === 'supply' ? options.effectiveAsset.value?.decimals ?? evault.asset.decimals : evault.asset.decimals)
       const cashDelta = options.mode === 'supply' ? amountNano : -amountNano
       const fallbackBaseSupplyApy = collateralBaseSupplyApy.value
       const fallbackTotalSupplyApy = collateralSupplyApy.value
@@ -1034,7 +1040,9 @@ export const useCollateralForm = (options: UseCollateralFormOptions) => {
     const snapshot = Object.freeze({
       vaultAddress: collateralVault.value.address,
       assetAddress: asset.value.address,
-      assetDecimals: asset.value.decimals,
+      assetDecimals: options.mode === 'supply'
+        ? options.effectiveAsset.value?.decimals ?? asset.value.decimals
+        : asset.value.decimals,
       amount: amount.value,
       needsSwap,
       quote,

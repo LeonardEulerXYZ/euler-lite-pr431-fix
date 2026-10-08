@@ -337,7 +337,7 @@ const vault = computed(() => eVault.value)
 const balance = computed(() => asset.value?.address ? getBalance(asset.value.address as Address) : 0n)
 const selectedAssetBalance = computed(() => selectedAsset.value?.address ? getBalance(selectedAsset.value.address as Address) : 0n)
 const activeBalance = computed(() => (needsSwap.value || isNativeWrap.value) ? selectedAssetBalance.value : balance.value)
-const activeAsset = computed(() => (needsSwap.value || isNativeWrap.value) ? selectedAsset.value : asset.value)
+const activeAsset = computed(() => selectedAsset.value ?? asset.value)
 const errorText = computed(() => {
   if (activeBalance.value < valueToNano(amount.value, activeAsset.value?.decimals)) {
     return 'Not enough balance'
@@ -536,7 +536,8 @@ function createSupplyIntent(quote?: SwapQuote) {
       source: 'lend',
     })
   }
-  const supplyAmount = valueToNano(amount.value || '0', asset.value.decimals)
+  if (!selectedAsset.value) throw new Error('Token decimals are not verified')
+  const supplyAmount = valueToNano(amount.value || '0', selectedAsset.value.decimals)
   const wrappedAddress = isNativeWrap.value ? resolveWrappedNativeAddress(chainId.value!) : null
   return createIntent({
     kind: 'deposit',
@@ -564,7 +565,7 @@ const submit = async () => {
   const capturedAmount = amount.value
   const capturedAsset = asset.value
   const capturedChainId = chainId.value!
-  const inputAsset = needsSwapSnapshot ? selectedAsset.value : capturedAsset
+  const inputAsset = selectedAsset.value
   if (!inputAsset) return
   const inputAmount = valueToNano(capturedAmount || '0', inputAsset.decimals)
   const isNative = isNativeCurrencyAddress(inputAsset.address)
@@ -741,7 +742,7 @@ const addToBatch = async () => {
         label: `Deposit ${amount.value} ${asset.value.symbol}`,
         intent: createSupplyIntent(),
         subAccount: effectiveAddress.value as Address | undefined,
-        review: { type: 'supply', asset: asset.value, amount: amount.value },
+        review: { type: 'supply', asset: selectedAsset.value!, amount: amount.value },
       })
     }
     amount.value = ''
@@ -761,7 +762,7 @@ const updateEstimates = useDebounceFn(async () => {
       // When swapping, use the swap output amount (vault-asset denominated)
       const supplyNano = needsSwap.value
         ? BigInt(swapEffectiveQuote.value?.amountOut || 0)
-        : valueToNano(amount.value, currentVault.shares.decimals)
+        : valueToNano(amount.value, selectedAsset.value?.decimals)
 
       if (needsSwap.value && !supplyNano) {
         // The vault-asset amount is unknown until a quote resolves, so there is
@@ -987,6 +988,8 @@ watch(
   { immediate: true },
 )
 
+watch([asset, chainId], ([vaultAsset]) => spending.setDefaultAsset(vaultAsset), { immediate: true })
+
 watch(selectedAsset, async () => {
   if (needsSwap.value && amount.value) {
     resetSwapQuoteState()
@@ -1154,7 +1157,7 @@ watch([
               v-model="amount"
               label="Supply amount"
               :desc="name"
-              :asset="(needsSwap || isNativeWrap) && selectedAsset ? selectedAsset : asset"
+              :asset="selectedAsset ?? asset"
               :vault="(needsSwap || isNativeWrap) ? undefined : (vault || securitizeVault)"
               :price-override="(needsSwap || isNativeWrap) ? swapAssetUsdPrice : undefined"
               :balance="activeBalance"
