@@ -2,6 +2,7 @@ import { computed, ref, shallowRef, watch, watchEffect, type Ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SwapperMode, type Account, type EVault, type IHasVaultAddress, type PortfolioBorrowPosition, type SwapQuote, type TransactionPlan, type VaultEntity } from '@eulerxyz/euler-v2-sdk'
 import { useWalletSwapRepay } from '~/composables/repay/useWalletSwapRepay'
+import { queryClient } from '~/utils/query-client'
 
 const { USER, borrowVault, collateralVault, walletAsset, planAccount, mocks } = vi.hoisted(() => {
   const USER = '0x0000000000000000000000000000000000000001' as `0x${string}`
@@ -206,6 +207,8 @@ describe('useWalletSwapRepay', () => {
       }),
     }))
     vi.clearAllMocks()
+    queryClient.clear()
+    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(0) }) }))
     mocks.swapQuoteOptions.length = 0
     mocks.quoteStates.length = 0
     mocks.planSwapAndRepay.mockResolvedValue({ type: 'wallet-swap-repay-plan' } as unknown as TransactionPlan)
@@ -297,8 +300,10 @@ describe('useWalletSwapRepay', () => {
     })
 
     repay.selectedAsset.value = walletAsset
+    await vi.waitFor(() => expect(repay.selectedAsset.value).toBeDefined())
 
     const quote = {
+      tokenIn: walletAsset,
       amountIn: '100',
       amountOut: '200',
       amountOutMin: '190',
@@ -331,9 +336,11 @@ describe('useWalletSwapRepay', () => {
       oraclePriceRatio: computed(() => 1),
     })
     repay.selectedAsset.value = walletAsset
+    await vi.waitFor(() => expect(repay.selectedAsset.value).toBeDefined())
     repay.amount.value = '100'
     repay.direction.value = SwapperMode.EXACT_IN
     mocks.quoteStates[0]!.selectedQuote.value = {
+      tokenIn: walletAsset,
       amountIn: '100', amountOut: '99', amountOutMin: '98',
       receiver: borrowVault.address, accountOut: USER,
     } as SwapQuote
@@ -363,9 +370,11 @@ describe('useWalletSwapRepay', () => {
       oraclePriceRatio: computed(() => 1),
     })
     repay.selectedAsset.value = walletAsset
+    await vi.waitFor(() => expect(repay.selectedAsset.value).toBeDefined())
     repay.amount.value = '100'
 
     const firstQuote = {
+      tokenIn: walletAsset,
       amountIn: '100',
       amountOut: '200',
       amountOutMin: '190',
@@ -406,9 +415,11 @@ describe('useWalletSwapRepay', () => {
       oraclePriceRatio: computed(() => 1),
     })
     repay.selectedAsset.value = walletAsset
+    await vi.waitFor(() => expect(repay.selectedAsset.value).toBeDefined())
     repay.amount.value = '100'
 
     const quote = {
+      tokenIn: walletAsset,
       amountIn: '100',
       amountOut: '200',
       amountOutMin: '190',
@@ -443,8 +454,10 @@ describe('useWalletSwapRepay', () => {
       oraclePriceRatio: computed(() => 1),
     })
     repay.selectedAsset.value = walletAsset
+    await vi.waitFor(() => expect(repay.selectedAsset.value).toBeDefined())
     repay.amount.value = '100'
     const validQuote = {
+      tokenIn: walletAsset,
       amountIn: '100',
       amountOut: '200',
       amountOutMin: '190',
@@ -494,8 +507,10 @@ describe('useWalletSwapRepay', () => {
       oraclePriceRatio: computed(() => 1),
     })
     repay.selectedAsset.value = walletAsset
+    await vi.waitFor(() => expect(repay.selectedAsset.value).toBeDefined())
     repay.amount.value = '100'
     const quote = {
+      tokenIn: walletAsset,
       amountIn: '100',
       amountOut: '200',
       amountOutMin: '190',

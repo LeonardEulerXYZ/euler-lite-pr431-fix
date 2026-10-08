@@ -42,6 +42,8 @@ import {
 
 export interface UseCollateralFormOptions {
   mode: 'supply' | 'withdraw'
+  inputBlocked?: ComputedRef<boolean>
+  validateSwapQuote?: (quote: SwapQuote) => void
 
   needsSwap: ComputedRef<boolean>
   effectiveBalance: ComputedRef<bigint>
@@ -205,6 +207,7 @@ export const useCollateralForm = (options: UseCollateralFormOptions) => {
     selectProvider: selectSwapQuote,
   } = useSwapQuotesParallel({
     amountField: 'amountOut',
+    validateQuote: options.validateSwapQuote,
     compare: 'max',
     buildTxPlanForQuote: (quote, _provider, context) => buildCollateralSwapPlanFromQuote(quote, context.account),
     createIntentsForQuote: quote => [options.createReviewIntent(quote)],
@@ -719,6 +722,7 @@ export const useCollateralForm = (options: UseCollateralFormOptions) => {
   })
 
   const isSubmitDisabled = computed(() => {
+    if (options.inputBlocked?.value) return true
     if (!isConnected.value && !isSpyMode.value) return false
     if (collateralVault.value && isEVault(collateralVault.value) && isOpDisabled(collateralVault.value, collateralOp.value)) return true
     if (options.effectiveBalance.value < valueToNano(amount.value, options.effectiveAsset.value?.decimals)) return true
@@ -1013,6 +1017,7 @@ export const useCollateralForm = (options: UseCollateralFormOptions) => {
 
   // --- Submit ---
   const submit = async () => {
+    if (options.inputBlocked?.value) return
     if (isOperationBlocked.value) return
     if (isPreparing.value
       || isGeoBlocked.value

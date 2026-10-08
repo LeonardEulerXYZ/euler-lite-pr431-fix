@@ -676,9 +676,16 @@ watch(
                   :selected-source="borrow.isSavingCollateral.value ? 'saving' : 'wallet'"
                   :selected-sub-account="borrow.selectedSavingSubAccount.value"
                   :selected-vault-address="collateralVault?.address"
-                  maxable
+                  :maxable="!borrow.spending.isBlocked.value"
+                  :readonly="borrow.spending.isBlocked.value"
                   @input="borrow.onCollateralInput"
                   @change-collateral="borrow.onChangeCollateral"
+                />
+
+                <SpendingAssetStatus
+                  :loading="borrow.spending.isLoading.value"
+                  :error="borrow.spending.error.value"
+                  @retry="borrow.spending.retry"
                 />
 
                 <!-- Pay with token selector -->

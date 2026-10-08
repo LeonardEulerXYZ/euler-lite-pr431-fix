@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { collectPythFeedsFromRouteSteps, isSecuritizeCollateralVault, type EVault, type PluginPrefetchData, type SecuritizeCollateralVault, type TransactionPlan, type TransactionPlanPrepared, type SwapQuote, SwapperMode } from '@eulerxyz/euler-v2-sdk'
 import type { VaultAsset } from '~/types/asset'
+import { useVerifiedSpendingAsset } from '~/composables/useVerifiedSpendingAsset'
+import { assertSpendingQuoteAsset } from '~/utils/spending-quote'
 import { isSecuritizeVault } from '~/utils/vault/categories'
 import { getHookDisabledWarning, getUtilisationWarning, getSupplyCapWarning } from '~/composables/useVaultWarnings'
 import { getAssetOraclePrice, getTokenUsdPrice } from '~/utils/sdk-prices'
@@ -126,7 +128,17 @@ const estimateSupplyAPY = ref<number | null>(0)
 const projectedYieldDetails = ref<ProjectedYieldDetails | null>(null)
 
 // Swap & deposit state
-const selectedAsset = ref<VaultAsset | undefined>()
+const spending = useVerifiedSpendingAsset(() => {
+  amount.value = ''
+  clearSimulationError()
+  resetSwapQuoteState()
+})
+const { asset: selectedAsset, isBlocked: spendingBlocked, isLoading: spendingLoading, error: spendingError } = spending
+const validateSpendingQuote = (quote: SwapQuote) => {
+  const asset = selectedAsset.value
+  if (!asset) throw new Error('Token decimals are not verified')
+  assertSpendingQuoteAsset(quote, asset, isNativeCurrencyAddress(asset.address) ? resolveWrappedNativeAddress(chainId.value!) : undefined)
+}
 const swapAssetUsdPrice = ref<number | undefined>()
 const isUnknownSwapToken = ref(false)
 const needsSwap = computed(() => {
@@ -166,6 +178,7 @@ const {
   amountField: 'amountOut',
   compare: 'max',
   buildTxPlanForQuote: (quote, _provider, context) => buildSwapSupplyPlanFromQuote(quote, context.account),
+  validateQuote: validateSpendingQuote,
   createIntentsForQuote: quote => [createSupplyIntent(quote)],
   getPlanAccount: () => planAccount.value,
   getStateOverrideOptions: () => buildLendStateOverrideOptions(),
@@ -335,6 +348,7 @@ const isSupplyCapReached = computed(() => eVault.value ? getIsSupplyCapReached(e
 const assets = computed(() => [asset.value!])
 const hasActiveSession = computed(() => isConnected.value || isSpyMode.value)
 const isSubmitDisabled = computed(() => {
+  if (spending.isBlocked.value) return true
   if (!hasActiveSession.value) return false
   if (eVault.value && isOpDisabled(eVault.value, OP_DEPOSIT)) return true
   if (activeBalance.value < valueToNano(amount.value, activeAsset.value?.decimals)) return true
@@ -485,6 +499,7 @@ const buildSwapSupplyPlanFromQuote = async (quote: SwapQuote, account = planAcco
   if (isNative && !wrappedAddress) {
     throw new Error('Wrapped native token not found')
   }
+  assertSpendingQuoteAsset(quote, inputAsset, wrappedAddress)
   return planDepositWithSwap({
     swapQuote: quote,
     amount: inputAmount,
@@ -505,6 +520,7 @@ function createSupplyIntent(quote?: SwapQuote) {
     const isNative = isNativeCurrencyAddress(inputAsset.address)
     const wrappedAddress = isNative ? resolveWrappedNativeAddress(chainId.value!) : null
     if (isNative && !wrappedAddress) throw new Error('Wrapped native token not found')
+    assertSpendingQuoteAsset(quote, inputAsset, wrappedAddress)
     return createIntent({
       kind: 'deposit',
       planner: 'deposit-with-swap',
@@ -690,6 +706,7 @@ const isCowSwapSelected = computed(() =>
   needsSwap.value && isCowProviderOrQuote(swapSelectedProvider.value, swapSelectedQuote.value),
 )
 const canAddToBatch = computed(() => {
+  if (spendingBlocked.value) return false
   if (isGeoBlocked.value || isSwapRestricted.value || isSourceAssetBlocked.value) return false
   if (!(+amount.value) || isNativeWrap.value) return false
   if (activeBalance.value < valueToNano(amount.value, activeAsset.value?.decimals)) return false
@@ -1141,7 +1158,13 @@ watch([
               :vault="(needsSwap || isNativeWrap) ? undefined : (vault || securitizeVault)"
               :price-override="(needsSwap || isNativeWrap) ? swapAssetUsdPrice : undefined"
               :balance="activeBalance"
-              maxable
+              :readonly="spendingBlocked"
+              :maxable="!spendingBlocked"
+            />
+            <SpendingAssetStatus
+              :loading="spendingLoading"
+              :error="spendingError"
+              @retry="spending.retry"
             />
 
             <!-- Pay with token selector -->

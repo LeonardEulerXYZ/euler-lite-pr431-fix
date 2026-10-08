@@ -1,10 +1,12 @@
 import { computed, nextTick, ref, shallowRef, watch, watchEffect, type Ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Address } from 'viem'
+import { formatUnits, type Address } from 'viem'
+import { valueToNano } from '~/utils/crypto-utils'
 import type { Account, EVault, IHasVaultAddress, PortfolioSavingsPosition, VaultEntity } from '@eulerxyz/euler-v2-sdk'
 import { useBorrowForm } from '~/composables/borrow/useBorrowForm'
 import type { RewardCampaign } from '~/entities/reward-campaign'
 import { activeLayerVaultsRef } from '~/composables/useLayeredVaults'
+import { queryClient } from '~/utils/query-client'
 
 const { USER, SUB_ACCOUNT_A, SUB_ACCOUNT_B, VAULT, vault, planAccount, mocks } = vi.hoisted(() => {
   const USER = '0x0000000000000000000000000000000000000001'
@@ -236,6 +238,8 @@ const makeForm = (
 describe('useBorrowForm savings collateral', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    queryClient.clear()
+    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(0) }) }))
     mocks.getProjectedRatesBatch.mockImplementation(async (requests: unknown[]) => requests.map(() => null))
     mocks.getPositionMultiplier.mockReturnValue(1)
     mocks.getAssetUsdValueForEstimate.mockResolvedValue(0)
@@ -498,6 +502,7 @@ describe('useBorrowForm savings collateral', () => {
       tokenOut: { ...vault.asset, chainId: 1 },
     }
     form.borrowSelectedAsset.value = payToken
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value).toBeDefined())
     form.collateralAmount.value = '10'
 
     const previewIntent = mocks.swapQuoteOptions.createIntentsForQuote?.(quote)?.[0] as { planner: { args: { borrowAmount: bigint } } }
@@ -869,6 +874,60 @@ describe('useBorrowForm savings collateral', () => {
     )
   })
 
+  it('verifies programmatic Pay-with selection before parsing or review and clears old units', async () => {
+    queryClient.clear()
+    let resolve!: (decimals: number) => void
+    const readContract = vi.fn(() => new Promise<number>((done) => {
+      resolve = done
+    }))
+    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract }) }))
+    const form = makeForm(shallowRef([]))
+    form.collateralAmount.value = '5'
+    form.borrowSelectedAsset.value = {
+      address: '0x0000000000000000000000000000000000000099', name: 'Selected token', symbol: 'SEL', decimals: 18,
+    }
+    expect(form.borrowSelectedAsset.value).toBeUndefined()
+    expect(form.collateralAmount.value).toBe('')
+    expect(form.isSubmitDisabled.value).toBe(true)
+    await form.submit()
+    expect(mocks.openReview).not.toHaveBeenCalled()
+    resolve(8)
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value?.decimals).toBe(8))
+    expect(form.borrowActiveAssetDecimals.value).toBe(8)
+    expect(readContract).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([17, 8])('uses verified %i units for typed and Max input through intent and review', async (decimals) => {
+    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(decimals) }) }))
+    vi.stubGlobal('valueToNano', valueToNano)
+    const form = makeForm(shallowRef([]))
+    const candidate = { address: '0x0000000000000000000000000000000000000099' as const, name: 'Selected token', symbol: 'SEL', decimals: 18 }
+    form.onSelectBorrowSwapAsset(candidate)
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value?.decimals).toBe(decimals))
+    const selected = form.borrowSelectedAsset.value!
+    const balance = 31n * 10n ** BigInt(decimals)
+    for (const amount of ['2', formatUnits(balance, selected.decimals)]) {
+      form.collateralAmount.value = amount
+      const raw = valueToNano(amount, selected.decimals)
+      const quote = {
+        amountIn: raw.toString(), amountInMax: raw.toString(), amountOut: '8', amountOutMin: '7',
+        tokenIn: selected, tokenOut: vault.asset,
+      }
+      mocks.borrowEffectiveQuote.value = quote
+      await nextTick()
+      const snapshot = form.captureBorrowSnapshot(SUB_ACCOUNT_A as Address)
+      const intent = form.createBorrowIntent(snapshot) as unknown as { planner: { args: { amount: bigint } } }
+      expect(intent.planner.args.amount).toBe(amount === '2' ? 2n * 10n ** BigInt(decimals) : balance)
+      mocks.planSwapAndBorrow.mockResolvedValue([{ type: 'evcBatch', items: [] }])
+      mocks.runSimulation.mockResolvedValue(true)
+      await form.submit()
+      expect(mocks.openReview).toHaveBeenLastCalledWith(expect.any(Array), expect.objectContaining({
+        review: expect.objectContaining({ asset: selected, amount }),
+      }))
+    }
+    expect(candidate.decimals).toBe(18)
+  })
+
   it('clears the savings source when selecting a Pay-with token', () => {
     const positions = shallowRef<PortfolioSavingsPosition<VaultEntity>[]>([
       makeSavingsPosition(SUB_ACCOUNT_A, 100n, 90n),
@@ -898,6 +957,7 @@ describe('useBorrowForm savings collateral', () => {
       symbol: 'PAY',
       decimals: 0,
     }
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value).toBeDefined())
     mocks.borrowEffectiveQuote.value = { amountIn: '100', amountOut: '80' }
     form.collateralAmount.value = '100'
     form.borrowAmount.value = '20'

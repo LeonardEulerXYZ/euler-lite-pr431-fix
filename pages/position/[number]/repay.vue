@@ -182,6 +182,7 @@ const isCowSwapSelectedForBatch = computed(() => {
   return false
 })
 const canAddToBatch = computed(() => {
+  if (formTab.value === 'wallet' && walletSwap.spending.isBlocked.value) return false
   if (!borrowVault.value || !position.value) return false
   if (formTab.value === 'wallet') {
     if (!(+wallet.amount.value) && !(+walletSwap.amount.value)) return false
@@ -500,8 +501,12 @@ const formTabs = computed(() => {
 })
 
 // --- Submit ---
+watch(walletSwap.spending.isBlocked, () => {
+  wallet.amount.value = ''
+}, { flush: 'sync' })
 const reviewRepayLabel = 'Review Repay'
 const reviewRepayDisabled = computed(() => {
+  if (formTab.value === 'wallet' && walletSwap.spending.isBlocked.value) return true
   if (formTab.value === 'wallet') {
     return walletSwap.needsSwap.value
       ? (isWalletSwapRestricted.value || isPayWithAssetBlocked.value || walletSwap.isSubmitDisabled.value)
@@ -552,6 +557,7 @@ const activeHookWarning = computed(() => {
 })
 
 const onSubmitForm = async () => {
+  if (formTab.value === 'wallet' && walletSwap.spending.isBlocked.value) return
   if (isOperationBlocked.value) return
   if (formTab.value === 'wallet') {
     if (walletSwap.needsSwap.value) {
@@ -684,7 +690,8 @@ watch(formTab, () => {
                   :vault="borrowVault"
                   :balance="walletBalance"
                   :max-handler="wallet.onSourceMax"
-                  maxable
+                  :readonly="walletSwap.spending.isBlocked.value"
+                  :maxable="!walletSwap.spending.isBlocked.value"
                 />
 
                 <AssetInput
@@ -694,11 +701,12 @@ watch(formTab, () => {
                   :asset="borrowVault.asset"
                   :vault="borrowVault"
                   :balance="position.borrowed"
-                  maxable
+                  :readonly="walletSwap.spending.isBlocked.value"
+                  :maxable="!walletSwap.spending.isBlocked.value"
                 />
 
                 <UiRange
-                  v-if="borrowVault"
+                  v-if="borrowVault && !walletSwap.spending.isBlocked.value"
                   v-model="wallet.walletRepayPercent.value"
                   label="Percent of debt to repay"
                   :min="0"
@@ -718,7 +726,8 @@ watch(formTab, () => {
                   :asset="walletSwap.selectedAsset.value"
                   :balance="walletSwap.selectedAssetBalance.value"
                   :max-handler="walletSwap.onSourceMax"
-                  maxable
+                  :readonly="walletSwap.spending.isBlocked.value"
+                  :maxable="!walletSwap.spending.isBlocked.value"
                   @update:model-value="walletSwap.onAmountInput"
                 />
 
@@ -729,12 +738,13 @@ watch(formTab, () => {
                   :asset="borrowVault.asset"
                   :vault="borrowVault"
                   :balance="position.borrowed"
-                  maxable
+                  :readonly="walletSwap.spending.isBlocked.value"
+                  :maxable="!walletSwap.spending.isBlocked.value"
                   @update:model-value="walletSwap.onDebtInput"
                 />
 
                 <UiRange
-                  v-if="borrowVault"
+                  v-if="borrowVault && !walletSwap.spending.isBlocked.value"
                   v-model="walletSwap.debtPercent.value"
                   label="Percent of debt to repay"
                   :min="0"
@@ -744,6 +754,12 @@ watch(formTab, () => {
                   @update:model-value="walletSwap.onPercentInput"
                 />
               </template>
+
+              <SpendingAssetStatus
+                :loading="walletSwap.spending.isLoading.value"
+                :error="walletSwap.spending.error.value"
+                @retry="walletSwap.spending.retry"
+              />
 
               <!-- Pay with token selector -->
               <div class="flex items-center gap-8">
