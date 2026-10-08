@@ -1,15 +1,13 @@
 import { computed, getCurrentScope, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import { getAddress, zeroAddress } from 'viem'
 import type { VaultAsset } from '~/types/asset'
-import { erc20DecimalsAbi } from '~/abis/erc20'
-import { queryClient } from '~/utils/query-client'
+import { getEulerSdkForChain } from '~/composables/useEulerSdk'
 
 /** Only selected spending tokens are verified; lists and output pickers stay read-free.
  * The writable ref accepts candidates but exposes only the verified local copy.
  */
 export const useVerifiedSpendingAsset = (invalidate?: () => void) => {
   const { chainId } = useEulerAddresses()
-  const { client } = useRpcClient()
   const requested = shallowRef<VaultAsset>()
   const verified = shallowRef<VaultAsset>()
   let defaultKey: string | undefined
@@ -22,7 +20,6 @@ export const useVerifiedSpendingAsset = (invalidate?: () => void) => {
     const current = ++generation
     const candidate = requested.value
     const chain = chainId.value
-    const rpc = client.value
     verified.value = undefined
     error.value = null
     isLoading.value = false
@@ -35,23 +32,11 @@ export const useVerifiedSpendingAsset = (invalidate?: () => void) => {
         verified.value = { ...candidate }
         return
       }
-      if (!rpc) throw new Error('RPC unavailable')
       isLoading.value = true
-      // Reuse the app query cache for success caching and concurrent-read dedup.
-      // Failed fetchQuery calls are not fresh, so explicit retry reaches RPC.
-      const decimals = await queryClient.fetchQuery({
-        queryKey: ['selected-spending-decimals', chain, address.toLowerCase()],
-        staleTime: Infinity,
-        gcTime: 30 * 60 * 1000,
-        retry: false,
-        queryFn: async () => {
-          const value = await rpc.readContract({ address, abi: erc20DecimalsAbi, functionName: 'decimals', authorizationList: undefined })
-          if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 255) {
-            throw new Error('Invalid token decimals')
-          }
-          return value
-        },
-      })
+      const sdk = await getEulerSdkForChain(chain)
+      if (!sdk.tokenlistService.resolveTokenDecimals) throw new Error('Token decimals resolver unavailable')
+      const decimals = await sdk.tokenlistService.resolveTokenDecimals(chain, address)
+      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Invalid token decimals')
       if (current === generation) verified.value = { ...candidate, decimals }
     }
     catch {

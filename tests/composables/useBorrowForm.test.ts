@@ -69,10 +69,15 @@ const { USER, SUB_ACCOUNT_A, SUB_ACCOUNT_B, VAULT, vault, planAccount, mocks } =
       openReview: vi.fn(async (..._args: unknown[]) => undefined),
       createIntent: vi.fn(),
       planAccountRef: undefined as unknown as Ref<Account<IHasVaultAddress>>,
+      resolveTokenDecimals: vi.fn(),
     },
   }
 })
 const rewardsVersion = ref(0)
+
+vi.mock('~/composables/useEulerSdk', () => ({
+  getEulerSdkForChain: vi.fn(async () => ({ tokenlistService: { resolveTokenDecimals: mocks.resolveTokenDecimals } })),
+}))
 
 vi.mock('#components', () => ({
   OperationReviewModal: {},
@@ -239,6 +244,7 @@ describe('useBorrowForm savings collateral', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queryClient.clear()
+    mocks.resolveTokenDecimals.mockReset().mockResolvedValue(0)
     vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(0) }) }))
     mocks.getProjectedRatesBatch.mockImplementation(async (requests: unknown[]) => requests.map(() => null))
     mocks.getPositionMultiplier.mockReturnValue(1)
@@ -878,12 +884,11 @@ describe('useBorrowForm savings collateral', () => {
   it('verifies programmatic Pay-with selection before parsing or review and clears old units', async () => {
     queryClient.clear()
     let resolve!: (decimals: number) => void
-    const readContract = vi.fn()
+    mocks.resolveTokenDecimals
       .mockResolvedValueOnce(0)
       .mockImplementationOnce(() => new Promise<number>((done) => {
         resolve = done
       }))
-    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract }) }))
     const form = makeForm(shallowRef([]))
     form.collateralAmount.value = '5'
     form.borrowSelectedAsset.value = {
@@ -897,11 +902,11 @@ describe('useBorrowForm savings collateral', () => {
     resolve(8)
     await vi.waitFor(() => expect(form.borrowSelectedAsset.value?.decimals).toBe(8))
     expect(form.borrowActiveAssetDecimals.value).toBe(8)
-    expect(readContract).toHaveBeenCalledTimes(2)
+    expect(mocks.resolveTokenDecimals).toHaveBeenCalledTimes(2)
   })
 
   it('passes the verified raw wallet collateral amount to direct borrow plans and intents', async () => {
-    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(6) }) }))
+    mocks.resolveTokenDecimals.mockResolvedValue(6)
     const collateral = {
       ...vault,
       asset: { ...vault.asset, decimals: 18 },
@@ -922,7 +927,7 @@ describe('useBorrowForm savings collateral', () => {
   })
 
   it.each([17, 8])('uses verified %i units for typed and Max input through intent and review', async (decimals) => {
-    vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(decimals) }) }))
+    mocks.resolveTokenDecimals.mockResolvedValue(decimals)
     vi.stubGlobal('valueToNano', valueToNano)
     const form = makeForm(shallowRef([]))
     const candidate = { address: '0x0000000000000000000000000000000000000099' as const, name: 'Selected token', symbol: 'SEL', decimals: 18 }

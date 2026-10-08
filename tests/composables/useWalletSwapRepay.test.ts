@@ -70,10 +70,15 @@ const { USER, borrowVault, collateralVault, walletAsset, planAccount, mocks } = 
       getCollateralApySnapshot: vi.fn(),
       getNetAPYFromWeightedSupplySnapshot: vi.fn(() => 10),
       getAssetUsdValueForEstimate: vi.fn(async () => 0 as number | undefined),
+      resolveTokenDecimals: vi.fn(),
     },
   }
 })
 const rewardsVersion = ref(0)
+
+vi.mock('~/composables/useEulerSdk', () => ({
+  getEulerSdkForChain: vi.fn(async () => ({ tokenlistService: { resolveTokenDecimals: mocks.resolveTokenDecimals } })),
+}))
 
 vi.mock('#components', () => ({
   OperationReviewModal: {},
@@ -208,6 +213,7 @@ describe('useWalletSwapRepay', () => {
     }))
     vi.clearAllMocks()
     queryClient.clear()
+    mocks.resolveTokenDecimals.mockReset().mockResolvedValue(0)
     vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(0) }) }))
     mocks.swapQuoteOptions.length = 0
     mocks.quoteStates.length = 0
