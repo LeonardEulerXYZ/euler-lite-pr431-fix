@@ -47,6 +47,10 @@ export const useVerifiedSpendingAsset = (invalidate?: () => void) => {
     }
   }
   watch(chainId, () => {
+    // A selected address and its label belong to the previous chain.
+    requested.value = undefined
+    defaultKey = undefined
+    defaultAddress = undefined
     void resolve()
   }, { flush: 'sync' })
   if (getCurrentScope()) {

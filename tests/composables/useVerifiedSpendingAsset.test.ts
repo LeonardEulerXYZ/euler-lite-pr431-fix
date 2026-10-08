@@ -1,6 +1,6 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { formatUnits, parseUnits, zeroAddress, type Address } from 'viem'
+import { formatUnits, getAddress, parseUnits, zeroAddress, type Address } from 'viem'
 import type { VaultAsset } from '~/types/asset'
 import { useVerifiedSpendingAsset as createState } from '~/composables/useVerifiedSpendingAsset'
 
@@ -101,8 +101,33 @@ describe('selected spending asset decimals', () => {
     chainId.value = 10
     expect(state.asset.value).toBeUndefined()
     await settle()
+    expect(sdkForChain).not.toHaveBeenCalledWith(10)
+    state.asset.value = token
+    await settle()
     expect(sdkForChain).toHaveBeenLastCalledWith(10)
     expect(resolveTokenDecimals).toHaveBeenLastCalledWith(10, expect.any(String))
+  })
+
+  it('clears an explicit pay-with choice on chain change and seeds the new default', async () => {
+    const state = useVerifiedSpendingAsset()
+    state.setDefaultAsset(token)
+    await settle()
+    state.asset.value = other
+    await settle()
+    const readsOnFirstChain = resolveTokenDecimals.mock.calls.length
+
+    chainId.value = 10
+    expect(state.asset.value).toBeUndefined()
+    expect(state.isBlocked.value).toBe(false)
+    await settle()
+    expect(resolveTokenDecimals).toHaveBeenCalledTimes(readsOnFirstChain)
+
+    const nextDefault = { ...token, address: '0x00000000000000000000000000000000000000ef' as Address }
+    state.setDefaultAsset(nextDefault)
+    expect(state.isBlocked.value).toBe(true)
+    await settle()
+    expect(state.asset.value).toEqual({ ...nextDefault, decimals: 17 })
+    expect(resolveTokenDecimals).toHaveBeenLastCalledWith(10, getAddress(nextDefault.address))
   })
 
   it('blocks failures without a list fallback and explicitly retries', async () => {
@@ -156,10 +181,10 @@ describe('selected spending asset decimals', () => {
     chainId.value = 10
     expect(invalidate).toHaveBeenCalledTimes(3)
     await settle()
-    expect(state.asset.value).toEqual({ ...other, decimals: 17 })
+    expect(state.asset.value).toBeUndefined()
     second.resolve(6)
     await settle()
-    expect(state.asset.value?.decimals).toBe(17)
+    expect(state.asset.value).toBeUndefined()
   })
 
   it('clearing selection or disposing invalidates an outstanding read', async () => {
