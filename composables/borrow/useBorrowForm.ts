@@ -712,6 +712,9 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
       const directDecimals = isSavingCollateral.value
         ? collateral.asset.decimals
         : borrowSelectedAsset.value?.decimals ?? collateral.asset.decimals
+      const directWalletCollateralDecimals = !isSavingCollateral.value && !borrowNeedsSwap.value
+        ? borrowSelectedAsset.value?.decimals
+        : undefined
       const collateralAmountNano = borrowNeedsSwap.value
         ? borrowSwapEffectiveQuote.value ? BigInt(borrowSwapEffectiveQuote.value.amountOut || 0) : 0n
         : valueToNano(collateralAmount.value || '0', directDecimals)
@@ -784,7 +787,12 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
       const [projectedRates, collateralUsdValues, borrowUsdValue] = await Promise.all([
         getProjectedRatesBatch(projectionRequests),
         Promise.all(collateralLegs.map(leg =>
-          getAssetUsdValueForEstimate(leg.assets, leg.vault, 'off-chain'))),
+          getAssetUsdValueForEstimate(
+            leg.assets,
+            leg.vault,
+            'off-chain',
+            leg.address === selectedCollateralAddress ? directWalletCollateralDecimals : undefined,
+          ))),
         getAssetUsdValueForEstimate(nextBorrowed, borrow, 'off-chain'),
       ])
       if (asyncEstimatesGuard.isStale(gen)) return
