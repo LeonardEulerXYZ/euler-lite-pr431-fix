@@ -211,9 +211,10 @@ export const getAssetUsdValue = async (
   amount: number | bigint,
   vault: AnyVault | null | undefined,
   source: PriceSource = 'off-chain',
+  amountDecimals?: number,
 ): Promise<number | undefined> => {
   if (!vault) return undefined
-  return tokenAmountToUsdValue(amount, vault.asset.decimals, await getAssetUsdPrice(vault, source))
+  return tokenAmountToUsdValue(amount, amountDecimals ?? vault.asset.decimals, await getAssetUsdPrice(vault, source))
 }
 
 /**
@@ -224,10 +225,11 @@ export const getAssetUsdValueForEstimate = async (
   amount: number | bigint,
   vault: AnyVault | null | undefined,
   source: PriceSource = 'off-chain',
+  amountDecimals?: number,
 ): Promise<number | undefined> => {
   if (!vault) return undefined
   if (amount === 0 || amount === 0n) return 0
-  const value = await getAssetUsdValue(amount, vault, source)
+  const value = await getAssetUsdValue(amount, vault, source, amountDecimals)
   return value !== undefined && Number.isFinite(value) && value > 0 ? value : undefined
 }
 

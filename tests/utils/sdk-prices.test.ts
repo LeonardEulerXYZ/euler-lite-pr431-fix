@@ -56,6 +56,16 @@ describe('sdk-prices', () => {
     await expect(getAssetUsdValueForEstimate(1_000_000n, vault, 'off-chain')).resolves.toBeUndefined()
   })
 
+  it('uses verified amount decimals for estimate values', async () => {
+    const vault = {
+      address: addressA,
+      asset: { decimals: 18, symbol: 'USDC' },
+      marketPriceUsd: ONE_18,
+    }
+
+    await expect(getAssetUsdValueForEstimate(1_250_000n, vault, 'off-chain', 6)).resolves.toBe(1.25)
+  })
+
   it('rejects a zero USD price for a positive estimate amount', async () => {
     const vault = {
       address: addressA,

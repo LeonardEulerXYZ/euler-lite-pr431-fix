@@ -292,15 +292,16 @@ export const useWalletRepay = (options: UseWalletRepayOptions) => {
     const currentPosition = position.value
     const currentCollateralVault = collateralVault.value
     const currentBorrowVault = borrowVault.value
+    const currentVerifiedAsset = verifiedAsset.value
     const currentBorrowApy = borrowApy.value
     _estimateNetAPY.value = null
     projectedYieldDetails.value = null
-    if (!currentPosition || !currentCollateralVault || !currentBorrowVault) {
+    if (!currentPosition || !currentCollateralVault || !currentBorrowVault || !currentVerifiedAsset) {
       isEstimatesLoading.value = false
       return
     }
     try {
-      const repayNano = valueToNano(amount.value, currentBorrowVault.shares.decimals)
+      const repayNano = valueToNano(amount.value, currentVerifiedAsset.decimals)
       const remainingBorrow = (currentPosition.borrowed || 0n) - repayNano
 
       const [currentCollateralSnapshot, nextCollateralSnapshot, currentBorrowUsd, borrowUsd] = await Promise.all([
@@ -311,8 +312,8 @@ export const useWalletRepay = (options: UseWalletRepayOptions) => {
             borrowsDelta: -repayNano,
           },
         }),
-        getAssetUsdValueForEstimate(currentPosition.borrowed || 0n, currentBorrowVault, 'off-chain'),
-        getAssetUsdValueForEstimate(remainingBorrow > 0n ? remainingBorrow : 0n, currentBorrowVault, 'off-chain'),
+        getAssetUsdValueForEstimate(currentPosition.borrowed || 0n, currentBorrowVault, 'off-chain', currentVerifiedAsset.decimals),
+        getAssetUsdValueForEstimate(remainingBorrow > 0n ? remainingBorrow : 0n, currentBorrowVault, 'off-chain', currentVerifiedAsset.decimals),
       ])
 
       if (asyncEstimatesGuard.isStale(gen)) return

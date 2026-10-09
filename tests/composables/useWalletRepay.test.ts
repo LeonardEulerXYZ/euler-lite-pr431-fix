@@ -146,7 +146,17 @@ describe('useWalletRepay projected Net APY', () => {
 
     repay.onSourceMax()
     expect(repay.amount.value).toBe('1500')
+    getCollateralApySnapshot.mockClear()
+    getAssetUsdValueForEstimate.mockClear()
     repay.amount.value = '1.25'
+    await vi.waitFor(() => expect(getCollateralApySnapshot).toHaveBeenCalledTimes(2))
+    expect(getCollateralApySnapshot).toHaveBeenLastCalledWith(
+      expect.anything(),
+      borrowVault,
+      { liabilityRateDelta: { cashDelta: 1_250_000n, borrowsDelta: -1_250_000n } },
+    )
+    expect(getAssetUsdValueForEstimate).toHaveBeenNthCalledWith(1, 2_000_000_000n, borrowVault, 'off-chain', 6)
+    expect(getAssetUsdValueForEstimate).toHaveBeenNthCalledWith(2, 1_998_750_000n, borrowVault, 'off-chain', 6)
     await repay.submit()
     expect(planRepayFromWallet).toHaveBeenCalledWith(expect.objectContaining({ liabilityAmount: 1_250_000n }))
   })
