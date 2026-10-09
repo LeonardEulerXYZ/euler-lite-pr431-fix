@@ -7,6 +7,7 @@ import { useBorrowForm } from '~/composables/borrow/useBorrowForm'
 import type { RewardCampaign } from '~/entities/reward-campaign'
 import { activeLayerVaultsRef } from '~/composables/useLayeredVaults'
 import { queryClient } from '~/utils/query-client'
+import { conservativePriceRatio, getAssetOraclePrice, getCollateralOraclePrice, ONE_18 } from '~/utils/sdk-prices'
 
 const { USER, SUB_ACCOUNT_A, SUB_ACCOUNT_B, VAULT, vault, planAccount, mocks } = vi.hoisted(() => {
   const USER = '0x0000000000000000000000000000000000000001'
@@ -143,6 +144,7 @@ vi.mock('~/composables/useSwapQuotesParallel', () => ({
 }))
 
 vi.mock('~/utils/sdk-prices', () => ({
+  ONE_18: 10n ** 18n,
   getAssetUsdValueForEstimate: mocks.getAssetUsdValueForEstimate,
   getAssetUsdValueOrZero: vi.fn(async () => 0),
   getAssetOraclePrice: vi.fn(() => ({ amountOutMid: 1n })),
@@ -249,6 +251,9 @@ const makeForm = (
 describe('useBorrowForm savings collateral', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getCollateralOraclePrice).mockReturnValue({ amountOutMid: 1n, amountOutAsk: 1n, amountOutBid: 1n })
+    vi.mocked(getAssetOraclePrice).mockReturnValue({ amountOutMid: 1n, amountOutAsk: 1n, amountOutBid: 1n })
+    vi.mocked(conservativePriceRatio).mockReturnValue(ONE_18)
     queryClient.clear()
     mocks.resolveTokenDecimals.mockReset().mockResolvedValue(0)
     vi.stubGlobal('useRpcClient', () => ({ client: ref({ readContract: vi.fn().mockResolvedValue(0) }) }))
@@ -354,7 +359,7 @@ describe('useBorrowForm savings collateral', () => {
       slippage: ref(0.5),
     }))
     vi.stubGlobal('usePriceInvert', () => ({
-      autoInvert: vi.fn(),
+      autoInvert: vi.fn((price: () => number) => price()),
       invertValue: vi.fn((value: number | null) => value),
       displaySymbol: 'USDC',
       toggle: vi.fn(),
@@ -450,6 +455,50 @@ describe('useBorrowForm savings collateral', () => {
     expect(form.ltv.value).toBe(40)
     expect(form.health.value).toBeCloseTo(1.875)
     expect(form.liquidationPrice.value).toBeCloseTo(initialLiquidationPrice * 4, 6)
+  })
+
+  it('uses verified direct-wallet collateral decimals for oracle price and LTV-derived borrow amount', async () => {
+    let resolveDecimals!: (decimals: number) => void
+    mocks.resolveTokenDecimals.mockImplementation(() => new Promise((resolve) => {
+      resolveDecimals = resolve
+    }))
+    const collateralVault = {
+      ...vault,
+      asset: { ...vault.asset, decimals: 18 },
+    } as EVault
+    const borrowVault = {
+      ...vault,
+      asset: { ...vault.asset, decimals: 6 },
+      shares: { ...vault.shares, decimals: 6 },
+    } as EVault
+    vi.mocked(getCollateralOraclePrice).mockImplementation((_liability, _collateral, decimals) => {
+      const price = decimals === 6 ? ONE_18 : ONE_18 * 10n ** 12n
+      return { amountOutMid: price, amountOutAsk: price, amountOutBid: price }
+    })
+    vi.mocked(getAssetOraclePrice).mockReturnValue({
+      amountOutMid: ONE_18,
+      amountOutAsk: ONE_18,
+      amountOutBid: ONE_18,
+    })
+    vi.mocked(conservativePriceRatio).mockImplementation((collateral, liability) =>
+      collateral && liability ? collateral.amountOutBid * ONE_18 / liability.amountOutAsk : 0n)
+
+    const form = makeForm(shallowRef([]), shallowRef(makePair(collateralVault, borrowVault)))
+    expect(form.priceFixed.value.isZero()).toBe(true)
+    expect(getCollateralOraclePrice).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.resolveTokenDecimals).toHaveBeenCalled())
+    resolveDecimals(6)
+    await vi.waitFor(() => expect(form.borrowSelectedAsset.value?.decimals).toBe(6))
+
+    expect(form.priceFixed.value.toUnsafeFloat()).toBe(1)
+    expect(getCollateralOraclePrice).toHaveBeenCalledWith(borrowVault, collateralVault, 6)
+    form.collateralAmount.value = '100'
+    form.ltv.value = 10
+    await form.onLtvInput()
+    expect(form.borrowAmount.value).toBe('10')
+
+    await form.onBorrowInput()
+    expect(form.ltv.value).toBe(10)
   })
 
   it('opens the review modal after a non-blocking borrow simulation', async () => {

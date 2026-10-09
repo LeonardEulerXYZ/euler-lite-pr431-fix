@@ -259,10 +259,31 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   const borrowSelectedAssetBalance = computed(() => borrowSelectedAsset.value?.address ? getBalance(borrowSelectedAsset.value.address as Address) : 0n)
   const borrowSwapAssetUsdPrice = ref<number | undefined>()
 
+  const borrowNeedsSwap = computed(() => {
+    if (!borrowSelectedAsset.value || !collateralVault.value) return false
+    // Swap-and-borrow ends with verifyAmountMinAndSkim which calls skim() on the
+    // collateral vault — securitize vaults don't implement skim, so the swap
+    // path is structurally unsupported here.
+    if (isSecuritizeCollateral.value) return false
+    try {
+      if (isNativeOfWrapped(borrowSelectedAsset.value.address, collateralVault.value.asset.address, chainId.value!)) return false
+      return getAddress(borrowSelectedAsset.value.address) !== getAddress(collateralVault.value.asset.address)
+    }
+    catch {
+      return false
+    }
+  })
+
   // --- Computed: prices ---
   const priceFixed = computed(() => {
-    const collateralPrice = borrowVault.value && collateralVault.value
-      ? getCollateralOraclePrice(borrowVault.value, collateralVault.value)
+    const directWalletCollateral = !isSavingCollateral.value && !borrowNeedsSwap.value
+    const verifiedDecimals = directWalletCollateral ? borrowSelectedAsset.value?.decimals : undefined
+    const collateralPrice = (!directWalletCollateral || verifiedDecimals !== undefined) && borrowVault.value && collateralVault.value
+      ? getCollateralOraclePrice(
+          borrowVault.value,
+          collateralVault.value,
+          verifiedDecimals,
+        )
       : undefined
     const borrowPrice = borrowVault.value ? getAssetOraclePrice(borrowVault.value) : undefined
     return FixedPoint.fromValue(conservativePriceRatio(collateralPrice, borrowPrice), 18)
@@ -317,21 +338,6 @@ export const useBorrowForm = (options: UseBorrowFormOptions) => {
   const computedBalance = computed(() => {
     if (isSavingCollateral.value) return savingAssets.value || 0n
     return balance.value
-  })
-
-  const borrowNeedsSwap = computed(() => {
-    if (!borrowSelectedAsset.value || !collateralVault.value) return false
-    // Swap-and-borrow ends with verifyAmountMinAndSkim which calls skim() on the
-    // collateral vault — securitize vaults don't implement skim, so the swap
-    // path is structurally unsupported here.
-    if (isSecuritizeCollateral.value) return false
-    try {
-      if (isNativeOfWrapped(borrowSelectedAsset.value.address, collateralVault.value.asset.address, chainId.value!)) return false
-      return getAddress(borrowSelectedAsset.value.address) !== getAddress(collateralVault.value.asset.address)
-    }
-    catch {
-      return false
-    }
   })
 
   const isBorrowNativeWrap = computed(() => {

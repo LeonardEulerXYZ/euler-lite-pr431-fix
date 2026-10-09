@@ -48,6 +48,7 @@ export type PriceResult = {
   amountOutMid: bigint
   amountOutAsk: bigint
   amountOutBid: bigint
+  decimals?: number
 }
 
 export type UsdAmount = {
@@ -133,10 +134,27 @@ export const getCollateralShareOraclePrice = (
 export const getCollateralOraclePrice = (
   liabilityVault: EVault | undefined | null,
   collateralVault: ERC4626Vault | undefined | null,
-): PriceResult | undefined =>
-  liabilityVault && collateralVault
-    ? getSdkCollateralOraclePrice(liabilityVault, collateralVault)
-    : undefined
+  assetDecimals?: number,
+): PriceResult | undefined => {
+  if (!liabilityVault || !collateralVault) return undefined
+  if (assetDecimals === undefined || assetDecimals === collateralVault.asset.decimals) {
+    return getSdkCollateralOraclePrice(liabilityVault, collateralVault)
+  }
+
+  const sharePrice = getSdkCollateralShareOraclePrice(liabilityVault, collateralVault)
+  if (!sharePrice || !liabilityVault.unitOfAccount || sharePrice.amountIn <= 0n) return undefined
+  const sharesPerAssetUnit = collateralVault.convertToShares(10n ** BigInt(assetDecimals))
+  const toAssetPrice = (amountOut: bigint) => amountOut * sharesPerAssetUnit / sharePrice.amountIn
+  const amountOutMid = toAssetPrice(sharePrice.amountOutMid)
+  const amountOutAsk = toAssetPrice(sharePrice.amountOutAsk)
+  const amountOutBid = toAssetPrice(sharePrice.amountOutBid)
+  return {
+    amountOutMid,
+    amountOutAsk: amountOutAsk > 0n ? amountOutAsk : amountOutMid,
+    amountOutBid: amountOutBid > 0n ? amountOutBid : amountOutMid,
+    decimals: liabilityVault.unitOfAccount.decimals,
+  }
+}
 
 const getAssetRiskUsdPrice = async (vault: AnyVault | undefined | null): Promise<PriceResult | undefined> => {
   if (!vault || !isEVault(vault)) return undefined
