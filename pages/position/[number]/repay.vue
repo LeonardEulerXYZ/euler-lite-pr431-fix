@@ -101,6 +101,7 @@ const liqPriceFromHealth = (health: number | null | undefined): number | null =>
 }
 
 // --- APYs ---
+const verifiedSpendingAsset = shallowRef<VaultAsset>()
 const {
   netAPY,
   collateralSupplyApy,
@@ -111,6 +112,7 @@ const {
   position,
   borrowVault,
   collateralVault,
+  verifiedSpendingAsset,
 })
 
 // --- Tab composables ---
@@ -132,6 +134,9 @@ const walletSwap = useWalletSwapRepay({
   borrowRewardApy,
   oraclePriceRatio,
 })
+watch(walletSwap.selectedAsset, (asset) => {
+  verifiedSpendingAsset.value = asset
+}, { immediate: true, flush: 'sync' })
 const wallet = useWalletRepay({
   position,
   borrowVault,
